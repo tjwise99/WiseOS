@@ -89,3 +89,67 @@ There is no `nix-users` group on Arch — the daemon socket is mode `0666`, so a
 once `nix-daemon.socket` is enabled.
 
 Reversible with `pacman -R nix && sudo rm -rf /nix /etc/nix`.
+
+## First boot
+
+`systemd.services.dotfiles-provision` clones [`dotfiles`](https://github.com/tjwise99/dotfiles) and
+runs its `./install` once, guarded by `~/.dotfiles-provisioned`. A failure leaves that marker
+unwritten, so the next boot retries rather than the machine being stuck half-configured.
+
+It is a unit of its own rather than a `home.activation` step, because `home-manager-wise.service`
+has `TimeoutStartSec=5m` and asdf compiles Rust and Go — activation would be killed mid-build. It
+clones over **HTTPS**, because a fresh machine has no SSH keys (`local/` is deliberately unsynced),
+which means `tools/sync.sh` cannot push until the remote is switched:
+
+```sh
+git -C ~/dotfiles remote set-url origin git@github.com:tjwise99/dotfiles.git
+```
+
+Until then the shell reports a sync failure at every prompt. That is the chosen trade, not a bug.
+
+## What NixOS does not give you
+
+Everything below was found by booting this config, and each one reads as a broken desktop rather
+than a missing declaration. They are recorded because the symptom never resembles the cause.
+
+**There is no baseline.** Manjaro's ISO supplied i3, polybar, picom, rofi, dunst, alacritty, X and
+lightdm implicitly — none of them appear in `dotfiles/packages/manifest.yaml`, whose `manjaro:` tier
+is empty. On NixOS nothing exists undeclared, so the desktop package list had to be *derived* from
+the exec targets in `i3/config`, and the fonts from what the theme templates name by string. That
+discovery is the real cost of the move, and most of its value.
+
+**A `shell:` step does not inherit the unit's PATH.** dotbot runs them with `$SHELL`, systemd sets
+`$SHELL` from the declared login shell, and NixOS's `/etc/zshenv` sources `/etc/set-environment`,
+which **assigns** `PATH` rather than extending it. So anything a `shell:` step needs must be in
+`environment.systemPackages`; the unit's own `path` only covers `./install` itself and the clone.
+The symptom was `python3: command not found` from a unit whose PATH demonstrably contained it.
+
+**asdf ships binaries NixOS cannot run.** Its Node asks for `/lib64/ld-linux-x86-64.so.2`, which
+does not exist. `programs.nix-ld.enable` supplies a loader; its default library set already covers
+`libstdc++` and `libgcc`. Keeping asdf rather than moving runtimes to Nix is deliberate — asdf is
+what gives the laptop and the WSL box one pinned version, and migrating only this host breaks that
+parity.
+
+**A hardcoded output name is fatal, not cosmetic.** `theme/polybar.ini.tmpl` named `eDP-1`; polybar
+exits with `Monitor not found or disconnected` rather than falling back, so the bar is absent
+entirely. Fixed upstream in dotfiles as `${env:MONITOR:}`.
+
+**Compositing on an emulated GPU is unusable.** The VM runner passes QEMU no video device at all.
+`-vga qxl` helps and is not enough; `i3/picom-launch.sh` now skips under `systemd-detect-virt`.
+
+## Open
+
+- **The wallpaper is an undeclared dependency of the whole theme pipeline.** `i3/config` execs
+  `wal -i ~/Pictures/wallpaper.jpg`; without it there is no palette, so no rendered configs and no
+  bar. It is not in either repo and was copied in by hand. Commit it, put it in `local/`, or have
+  provisioning fetch it.
+- **`theme.sh` never runs itself.** Its output persists across reboots, so it needs running exactly
+  once per install — and that once currently has no home. Natural fit for provisioning, but blocked
+  on the wallpaper.
+- **`initialPassword = "changeme"`** is in a public repo and would become the real login password on
+  metal. Replace with `hashedPassword`, or set it at install time.
+- **Disk layout for metal.** Wipe Manjaro or shrink for dual-boot, plus a backup either way. The ESP
+  is 512M, which is tight to share with another distro's kernels — `configurationLimit` is already
+  set to 10 for this reason.
+- Wifi, backlight, suspend and Intel graphics remain untested: a VM has no radio and no real GPU.
+  Their first real test is on hardware, from the installer USB where iterating is still possible.
