@@ -1,0 +1,9 @@
+# Build outputs. `nix build` and `nixos-rebuild build-vm` drop symlinks here.
+result
+result-*
+
+# VM disk images, written into the working directory by the build-vm runner.
+*.qcow2
+
+# direnv, if it ever gets used here.
+.direnv/

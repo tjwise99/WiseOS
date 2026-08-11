@@ -1,0 +1,28 @@
+{ pkgs, ... }:
+
+{
+  home.username = "wise";
+  home.homeDirectory = "/home/wise";
+
+  # This host is Manjaro, not NixOS. genericLinux fixes up XDG_DATA_DIRS and the
+  # session variables so packages installed here contribute their man pages,
+  # icons and .desktop entries to a system Nix did not build.
+  targets.genericLinux.enable = true;
+
+  # Packages only, deliberately.
+  #
+  # Every dotfile in $HOME is a Dotbot symlink into ~/dotfiles. Home Manager
+  # wants to own those same paths and refuses to clobber files it did not
+  # create, so the two would contend the moment this file grows a `programs.*`
+  # block that writes config. Migrating a path means removing it from
+  # profiles/base.conf.yaml in the same change — one at a time, on purpose.
+  home.packages = with pkgs; [
+    hello
+  ];
+
+  programs.home-manager.enable = true;
+
+  # The release whose defaults this config was written against. It is not a
+  # version to bump for newness — changing it opts into changed defaults.
+  home.stateVersion = "26.05";
+}
