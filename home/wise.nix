@@ -4,11 +4,6 @@
   home.username = "wise";
   home.homeDirectory = "/home/wise";
 
-  # This host is Manjaro, not NixOS. genericLinux fixes up XDG_DATA_DIRS and the
-  # session variables so packages installed here contribute their man pages,
-  # icons and .desktop entries to a system Nix did not build.
-  targets.genericLinux.enable = true;
-
   # Packages only, deliberately.
   #
   # Every dotfile in $HOME is a Dotbot symlink into ~/dotfiles. Home Manager
@@ -23,8 +18,8 @@
   ];
 
   programs.home-manager.enable = true;
-  
-  # silence the news alerts that pop up when rebuildingh
+ 
+  # silence the news alerts that pop up when rebuilding
   news.display = "silent";
   # The release whose defaults this config was written against. It is not a
   # version to bump for newness — changing it opts into changed defaults.
