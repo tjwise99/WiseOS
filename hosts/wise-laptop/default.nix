@@ -154,7 +154,7 @@ in
     wantedBy = [ "multi-user.target" ];
     after = [ "nix-daemon.socket" ];
 
-    path = with pkgs; [ bash python3 git openssh curl unzip gnutar gzip gnumake gcc coreutils ];
+    path = with pkgs; [ bash python3 git openssh curl unzip gnutar gzip gnumake gcc coreutils i3 ];
 
     serviceConfig = {
       Type = "oneshot";
@@ -183,6 +183,19 @@ in
 
       if [ ! -e "$HOME/.dotfiles-provisioned" ]; then
         cd dotfiles && ./install && touch "$HOME/.dotfiles-provisioned"
+      fi
+
+      # The session starts while this unit is still compiling, so i3 came up
+      # before ~/.config/i3 existed and loaded the packaged config instead —
+      # no bar, no theme, and nothing to run theme/session.sh before the next
+      # login. restart rather than reload: reload re-reads the file i3 already
+      # has, which is the wrong one; restart redoes the config search.
+      #
+      # Addressed by socket rather than DISPLAY so it needs no X authority. No
+      # session means no socket, and this is then a no-op.
+      sock="$(ls -t /run/user/$(id -u)/i3/ipc-socket.* 2>/dev/null | head -1)"
+      if [ -n "$sock" ]; then
+        I3SOCK="$sock" i3-msg restart >/dev/null 2>&1 || true
       fi
     '';
   };
