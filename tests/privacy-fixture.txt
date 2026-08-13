@@ -1,0 +1,14 @@
+Positive control for scripts/check-privacy.sh. Every pattern it enforces must
+match something here, so a run that scans nothing fails instead of printing the
+same line a clean scan prints. Invented values, matched by shape alone.
+
+Excluded from the real scan; the check asserts each pattern fires against it.
+
+  device        = "/dev/disk/by-uuid/6f3c1b2a-9d4e-4f8b-8c1d-2e5a7b9c0d1f";
+  macAddress    = "de:ad:be:ef:12:34";
+  gateway       = "192.168.1.1";
+  psk           = "example-not-a-real-key";
+  Passphrase=example-not-a-real-key
+  networking.wireless.networks."ExampleSSID".auth = "x";
+  password      = "example-not-a-real-password";
+  hashedPassword = "$6$example$notarealhash";
