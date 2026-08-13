@@ -55,7 +55,7 @@
 
         # The Ubuntu WSL box, on the same home/wise.nix:
         #     home-manager switch --flake .#wsl
-        wsl = genericLinuxHome "wise";
+        wsl = genericLinuxHome "tjwise";
       };
 
       # The future bare-metal machine. Bootable from Manjaro without installing
