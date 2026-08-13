@@ -180,9 +180,7 @@
     ];
 
     # The laptop's own key, so the forwarded port is reachable without a tty to
-    # type initialPassword into — which is what makes the VM testable from a
-    # script rather than only by hand. A public key is publishable by
-    # construction; this one is already on the GitHub account.
+    # type initialPassword into. That is what makes the VM scriptable.
     users.users.wise.openssh.authorizedKeys.keys = [
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIApZ86+DW+jVdB2ybqMxM3GwfacbqO07r8Q17z0w9JSc tjwise99@wise-laptop"
     ];

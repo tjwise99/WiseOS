@@ -4,10 +4,8 @@
 # the NixOS machine that replaces the first. Nothing here may need X, a radio or
 # particular hardware — that belongs in hosts/wise-laptop.
 #
-# home.username and home.homeDirectory are deliberately absent. The two Home
-# Manager outputs in flake.nix supply them, and the NixOS module derives them
-# from users.users.wise, so naming them here would fix a username this file has
-# no business knowing.
+# home.username and home.homeDirectory are absent on purpose: flake.nix supplies
+# them per output, and the NixOS module derives them from users.users.wise.
 
 {
   # Packages only, deliberately.
@@ -26,15 +24,9 @@
 
     claude-code
 
-    # Also installed by asdf, which still pins them in ~/.tool-versions.
-    # ~/.nix-profile/bin precedes ~/.asdf/shims, so these win everywhere except
-    # in the scripts that prepend the shims themselves — the pre-commit hook,
-    # asdf/verify-tools.sh, and the two gh-*-build.sh.
-    #
-    # Dropping the asdf side is a dotfiles change, and it is gated on the WSL
-    # box running Home Manager: profiles/base.conf.yaml reaches that host within
-    # 20 minutes of a commit, and removing a plugin there before Nix supplies a
-    # replacement is what left it with no ranger, htop, fastfetch or zenity.
+    # Also pinned by asdf in ~/.tool-versions, and shadowed by these: dotfiles'
+    # shell/env.sh puts Nix ahead of asdf. Dropping the asdf side waits on the
+    # WSL box running Home Manager.
     gitleaks
     gh
     jq

@@ -30,9 +30,8 @@
 
       # Home Manager against a distro Nix did not build — Manjaro here, Ubuntu
       # under WSL. targets.genericLinux fixes up XDG_DATA_DIRS and the session
-      # variables so store packages contribute man pages, icons and .desktop
-      # entries to a system that knows nothing about them. It is meaningless on
-      # NixOS, which is why it lives here rather than in the shared file.
+      # variables so store packages reach a system that knows nothing about
+      # them; it is meaningless on NixOS, hence here and not in the shared file.
       #
       # The username is the only thing the two hosts can disagree about, so it
       # is the argument rather than a second copy of the module list.
@@ -54,9 +53,7 @@
         #     home-manager switch --flake .#wise
         wise = genericLinuxHome "wise";
 
-        # The Ubuntu WSL box. Same home/wise.nix — that file is userland TUI
-        # tooling, all of which crosses. Anything needing X, a radio or this
-        # laptop's hardware belongs in hosts/wise-laptop instead.
+        # The Ubuntu WSL box, on the same home/wise.nix:
         #     home-manager switch --flake .#wsl
         wsl = genericLinuxHome "wise";
       };
