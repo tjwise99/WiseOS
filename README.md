@@ -164,13 +164,10 @@ entirely. Fixed upstream in dotfiles as `${env:MONITOR:}`.
 
 ## Open
 
-- **The wallpaper is an undeclared dependency of the whole theme pipeline.** `i3/config` execs
-  `wal -i ~/Pictures/wallpaper.jpg`; without it there is no palette, so no rendered configs and no
-  bar. It is not in either repo and was copied in by hand. Commit it, put it in `local/`, or have
-  provisioning fetch it.
 - **`theme.sh` never runs itself.** Its output persists across reboots, so it needs running exactly
-  once per install — and that once currently has no home. Natural fit for provisioning, but blocked
-  on the wallpaper.
+  once per install — and that once has no home. Natural fit for provisioning. The wallpaper it
+  depends on is tracked at `dotfiles/theme/wallpaper.jpg` and linked with the rest of that
+  directory, so nothing is left blocking it.
 - **`initialPassword = "changeme"`** is in a public repo and would become the real login password on
   metal. Not `hashedPassword`: a crypt hash is offline-crackable once published, Nix copies it
   world-readable into `/nix/store` besides, and `just check-privacy` rejects it. Set it at install
