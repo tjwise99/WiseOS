@@ -7,7 +7,7 @@ check-eval:
     bash scripts/check-eval.sh
 
 [group('checks')]
-[doc('No disk UUID, MAC, SSID, wireless key, password or hash is committed')]
+[doc('Nothing machine-identifying is committed. Run it for the list — it prints what it enforced')]
 check-privacy:
     bash scripts/check-privacy.sh
 

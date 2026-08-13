@@ -64,10 +64,17 @@ Output names are discovered rather than listed, so a host added to `flake.nix` i
 touching the check.
 
 `check-privacy` is the one worth knowing about, because this repo is public and a credential scanner
-cannot see what leaks here. It rejects disk UUIDs, MACs, SSIDs, wireless keys, password hashes and
-private addresses — none of which are credential-shaped, and all of which fingerprint a machine and
-its network. It is a denylist and therefore fails open on anything nobody listed; encrypting secrets
-at rest is the control that does not depend on a pattern, tracked as issue #4 adopt sops-nix.
+cannot see what leaks here: a disk UUID, an SSID or a wireless passphrase is not credential-shaped,
+and together they fingerprint a machine and its network.
+
+**Run `just check-privacy` for what it enforces — it prints every check by name.** No list is kept
+here on purpose. Nothing compares a list in this file to the patterns in the script, so a copy goes
+stale the first time a pattern is added, with nothing to say so; a review of this repo found the
+justfile and this README had already drifted apart from the script in different directions, each
+omitting the one credential the config actually contains.
+
+It is a denylist and fails open on anything nobody listed. Encrypting secrets at rest is the control
+that does not depend on a pattern, tracked as issue #4 adopt sops-nix.
 
 ## Home Manager owns packages, not files
 
