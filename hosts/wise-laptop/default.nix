@@ -1,5 +1,32 @@
 { config, pkgs, lib, ... }:
 
+let
+  # theme.sh's gtk source reads the active GTK theme through gi, which needs the
+  # bindings and the introspection typelibs for everything it imports. Wrapped
+  # rather than exported into the session: the typelibs live in each library's
+  # `out` output, and environment.systemPackages installs the default one —
+  # which for pango and glib is `bin` and carries none. A GI_TYPELIB_PATH
+  # pointing at the system profile therefore finds Gtk and not Pango, and
+  # from_gtk fails on an override assertion rather than on anything legible.
+  gtkPython = pkgs.symlinkJoin {
+    name = "python3-gtk";
+    paths = [ (pkgs.python3.withPackages (ps: [ ps.pygobject3 ])) ];
+    nativeBuildInputs = [ pkgs.makeWrapper ];
+    postBuild = ''
+      wrapProgram $out/bin/python3 --prefix GI_TYPELIB_PATH : \
+        "${lib.makeSearchPathOutput "out" "lib/girepository-1.0" [
+          pkgs.gtk3
+          pkgs.glib
+          pkgs.pango
+          pkgs.at-spi2-core
+          pkgs.gdk-pixbuf
+          pkgs.harfbuzz
+          pkgs.gobject-introspection
+        ]}"
+    '';
+  };
+in
+
 {
   imports = [ ./hardware-configuration.nix ];
 
@@ -83,7 +110,7 @@
     # and NixOS's /etc/zshenv sources /etc/set-environment, which assigns PATH
     # rather than extending it — so the unit's own `path` is discarded as soon
     # as a shell step runs. Only what is declared here survives that.
-    python3
+    gtkPython
     gnumake
     gcc
     gnutar
