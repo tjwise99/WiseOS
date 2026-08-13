@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ config, pkgs, lib, ... }:
 
 {
   imports = [ ./hardware-configuration.nix ];
@@ -73,7 +73,7 @@
     dejavu_fonts
     noto-fonts
     noto-fonts-color-emoji
-  ];  
+  ];
 
   environment.systemPackages = with pkgs; [
     git
@@ -93,7 +93,10 @@
 
     # Desktop — derived from the exec targets in dotfiles/i3/config
     alacritty
-    polybar
+    (polybar.override {
+      i3Support = true;
+      pulseSupport = true;
+    })
     picom
     rofi
     dunst
@@ -110,6 +113,9 @@
     brave
     opencloud-desktop
     xrdb
+    libnotify
+    betterlockscreen
+    pulseaudio
   ];
 
   # First-boot provisioning: clone the dotfiles repo and run its installer once.
@@ -171,6 +177,14 @@
     services.openssh.enable = true;
     virtualisation.forwardPorts = [
       { from = "host"; host.port = 2222; guest.port = 22; }
+    ];
+
+    # The laptop's own key, so the forwarded port is reachable without a tty to
+    # type initialPassword into — which is what makes the VM testable from a
+    # script rather than only by hand. A public key is publishable by
+    # construction; this one is already on the GitHub account.
+    users.users.wise.openssh.authorizedKeys.keys = [
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIApZ86+DW+jVdB2ybqMxM3GwfacbqO07r8Q17z0w9JSc tjwise99@wise-laptop"
     ];
   };
 

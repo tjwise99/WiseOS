@@ -16,19 +16,49 @@
   outputs = { nixpkgs, home-manager, ... }:
     let
       system = "x86_64-linux";
+      # One list, reaching both outputs. They take it by different routes:
+      # nixosSystem builds its own pkgs from the nixpkgs.* options, so it is
+      # handed this as a module below; homeManagerConfiguration builds none and
+      # requires a package set, so one is instantiated here.
+      allowUnfreePredicate = pkg:
+        builtins.elem (nixpkgs.lib.getName pkg) [ "claude-code" ];
+
+      pkgs = import nixpkgs {
+        inherit system;
+        config = { inherit allowUnfreePredicate; };
+      };
+
+      # Home Manager against a distro Nix did not build — Manjaro here, Ubuntu
+      # under WSL. targets.genericLinux fixes up XDG_DATA_DIRS and the session
+      # variables so store packages contribute man pages, icons and .desktop
+      # entries to a system that knows nothing about them. It is meaningless on
+      # NixOS, which is why it lives here rather than in the shared file.
+      #
+      # The username is the only thing the two hosts can disagree about, so it
+      # is the argument rather than a second copy of the module list.
+      genericLinuxHome = username: home-manager.lib.homeManagerConfiguration {
+        inherit pkgs;
+        modules = [
+          ./home/wise.nix
+          {
+            targets.genericLinux.enable = true;
+            home.username = username;
+            home.homeDirectory = "/home/${username}";
+          }
+        ];
+      };
     in
     {
-      # Runs on the Manjaro install today:
-      #     home-manager switch --flake .#wise
-      homeConfigurations.wise = home-manager.lib.homeManagerConfiguration {
-        pkgs = nixpkgs.legacyPackages.${system};
-        modules = [ 
-          ./home/wise.nix 
-          # Manjaro only: fixes up XDG_DATA_DIRS and session vars on a system
-          # Nix did not build. Meaningless on NixOS, which is why it lives here
-          # rather than in the shared file.
-          { targets.genericLinux.enable = true; }
-        ];
+      homeConfigurations = {
+        # The Manjaro laptop:
+        #     home-manager switch --flake .#wise
+        wise = genericLinuxHome "wise";
+
+        # The Ubuntu WSL box. Same home/wise.nix — that file is userland TUI
+        # tooling, all of which crosses. Anything needing X, a radio or this
+        # laptop's hardware belongs in hosts/wise-laptop instead.
+        #     home-manager switch --flake .#wsl
+        wsl = genericLinuxHome "wise";
       };
 
       # The future bare-metal machine. Bootable from Manjaro without installing
@@ -38,8 +68,9 @@
       # No `system` argument: nixpkgs.hostPlatform in hardware-configuration.nix
       # is what sets it, and passing both is an eval conflict.
       nixosConfigurations.wise-laptop = nixpkgs.lib.nixosSystem {
-        modules = [ 
-          ./hosts/wise-laptop 
+        modules = [
+          ./hosts/wise-laptop
+          { nixpkgs.config.allowUnfreePredicate = allowUnfreePredicate; }
           home-manager.nixosModules.home-manager
           {
             home-manager.useGlobalPkgs = true;
