@@ -1,4 +1,4 @@
-{ config, pkgs, lib, ... }:
+{ pkgs, lib, ... }:
 
 let
   # theme.sh's gtk source reads the active GTK theme through gi, which needs the
