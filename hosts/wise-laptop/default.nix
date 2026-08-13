@@ -206,6 +206,14 @@ in
       { from = "host"; host.port = 2222; guest.port = 22; }
     ];
 
+    # Log straight into i3. Without a session nothing execs theme/session.sh, so
+    # the whole theme pipeline — the part with no equivalent on the metal path
+    # yet — cannot be exercised here at all.
+    services.displayManager.autoLogin = {
+      enable = true;
+      user = "wise";
+    };
+
     # The laptop's own key, so the forwarded port is reachable without a tty to
     # type initialPassword into. That is what makes the VM scriptable.
     users.users.wise.openssh.authorizedKeys.keys = [
