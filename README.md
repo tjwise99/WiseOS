@@ -17,7 +17,7 @@ and that repo is where this will probably end up. It is separate for now because
 shared with a WSL box, and sharing has a cost during the phase where things are half-written:
 
 - `tools/sync.sh` runs on a 20-minute timer on **both** machines, and rebases each onto the other.
-  Files added here would land on the WSL box within 20 minutes. Nothing would *execute* — sync does
+  Files added here would land on the WSL box within 20 minutes. Nothing would _execute_ — sync does
   git operations only, and never runs `./install` — but the files arrive regardless.
 - That sync also runs `tools/check-manifest.py --deployed`, which asserts every tracked file is
   deployed by some profile. Nix config is read by `nix`, not symlinked into `$HOME`, so it fails
@@ -34,12 +34,12 @@ argument for cohousing is atomic commits when a package moves from `packages/man
 
 ## Layout
 
-| Path | Contents |
-| --- | --- |
-| `flake.nix` | Inputs and the two outputs, sharing one nixpkgs pin |
-| `home/wise.nix` | Home Manager — runs on Manjaro now, carries over to NixOS |
-| `hosts/wise-laptop/` | The system config, and the hardware file the installer regenerates |
-| `justfile`, `scripts/` | The checks, and `just verify` — the one recipe CI runs |
+| Path                   | Contents                                                           |
+| ---------------------- | ------------------------------------------------------------------ |
+| `flake.nix`            | Inputs and the two outputs, sharing one nixpkgs pin                |
+| `home/wise.nix`        | Home Manager — runs on Manjaro now, carries over to NixOS          |
+| `hosts/wise-laptop/`   | The system config, and the hardware file the installer regenerates |
+| `justfile`, `scripts/` | The checks, and `just verify` — the one recipe CI runs             |
 
 ## The two outputs
 
@@ -73,9 +73,21 @@ stale the first time a pattern is added, with nothing to say so; a review of thi
 justfile and this README had already drifted apart from the script in different directions, each
 omitting the one credential the config actually contains.
 
-It is a denylist and fails open on anything nobody listed. The control that does not depend on a
-pattern — a secret with a correct encrypted home rather than a shape to be caught — is now in place
-with sops-nix; see [Secrets](#secrets).
+**What the two scanners cover, stated precisely rather than as a promise:**
+
+- `check-secrets` (gitleaks) covers **credential shapes**, in the worktree and in history. That is
+  its job and it does it — a committed `age` secret key is caught, for one.
+- `check-privacy` covers **identity**: the shapes it prints, none of which are credential-shaped, so
+  no credential scanner looks for them.
+- Neither covers **the same fact spelled another way** — a MAC written as an EUI-64 link-local IPv6
+  address is a MAC, and is not matched — nor identity with no distinctive shape at all, such as a
+  `machine-id`, an FQDN or a device serial.
+
+So the list is closed on purpose: a shape is added when this configuration produces one, not when
+someone thinks of one. Enumerating identity cannot succeed, because one fact has unbounded
+spellings, and a longer list would buy the appearance of coverage rather than coverage. The control
+that does not depend on a pattern — a secret with a correct encrypted home rather than a shape to be
+caught — is now in place with sops-nix; see [Secrets](#secrets).
 
 ## Secrets
 
@@ -86,7 +98,7 @@ into the world-readable `/nix/store`, and never as plaintext in a committed file
 One age key does three jobs, and its private half is in the repo for none of them. It lives at
 `~/.config/sops/age/keys.txt` on this dev host, where the `sops` CLI uses it to edit the repo; the
 QEMU VM does not get it (see below); and on metal it is placed at `/var/lib/sops-nix/key.txt` at
-install time, which is where the running system reads it. `.sops.yaml` records only the *public* key.
+install time, which is where the running system reads it. `.sops.yaml` records only the _public_ key.
 
 ```sh
 # Edit or add a secret (opens the decrypted file in $EDITOR, re-encrypts on save):
@@ -101,7 +113,7 @@ The committed hash is the real `wise` login hash, encrypted at rest — only the
 so committing it to this public repo exposes nothing. Rotate it any time with the `sops` command
 above; to set it on a fresh checkout, see [`docs/install.md`](docs/install.md).
 
-The password is a per-user secret, so it is decrypted *before* users are created
+The password is a per-user secret, so it is decrypted _before_ users are created
 (`neededForUsers`), a phase that runs before systemd has mounted anything. The VM deliberately does
 not carry the secret — it could, over a stage-1 9p share of the host key, but that would pin this
 public config to one host's key path; it keeps `initialPassword = "changeme"` instead, and the metal
@@ -121,7 +133,7 @@ reaching the store.
 Every dotfile in `$HOME` is a Dotbot symlink into `~/dotfiles` — 29 of them. Home Manager wants to
 own those same paths and refuses to clobber files it did not create, so a `programs.*` block that
 writes config would contend with Dotbot for the same target. Migrating a path is a deliberate,
-one-at-a-time change: add the Home Manager module *and* remove the link from
+one-at-a-time change: add the Home Manager module _and_ remove the link from
 `profiles/base.conf.yaml` in the same commit. Until then, Dotbot owns files and Nix owns packages,
 and the boundary is clean.
 
@@ -177,7 +189,7 @@ than a missing declaration. They are recorded because the symptom never resemble
 
 **There is no baseline.** Manjaro's ISO supplied i3, polybar, picom, rofi, dunst, alacritty, X and
 lightdm implicitly — none of them appear in `dotfiles/packages/manifest.yaml`, whose `manjaro:` tier
-is empty. On NixOS nothing exists undeclared, so the desktop package list had to be *derived* from
+is empty. On NixOS nothing exists undeclared, so the desktop package list had to be _derived_ from
 the exec targets in `i3/config`, and the fonts from what the theme templates name by string. That
 discovery is the real cost of the move, and most of its value.
 
