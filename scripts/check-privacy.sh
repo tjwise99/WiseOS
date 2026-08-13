@@ -12,19 +12,18 @@
 # shape nobody listed. The structural fix is encrypting secrets at rest with
 # sops-nix, tracked as issue #4.
 #
-# It prints what it enforced, so this script is the inventory and no document
-# has to carry a second copy of the list to fall out of step with.
+# It prints every check by name, so this script is the inventory and no
+# document has to carry a second copy to fall out of step with.
 #
-# A line carrying a privacy-ok marker (see the regex below) plus a reason is
-# exempt. Published constants share shapes with private ones — a Bluetooth
-# service UUID is 8-4-4-4 hex too — so blocking outright would reject legal
-# input. Exemptions are counted and printed, because a silent bypass is the
-# thing this file exists to not be.
+# ONE SHAPE PER CHECK, NEVER AN ALTERNATION. The control below asserts each
+# check matches the fixture; an alternation would satisfy that on one branch
+# while the others were dead, deleted or wrong. Four branches went unguarded
+# that way. A new shape gets a new entry and a new specimen, not a `|`.
 #
-# Nothing here may spell a pattern the way a config would. There is no
+# NOTHING HERE MAY SPELL A PATTERN THE WAY A CONFIG WOULD. There is no
 # self-exclusion — an earlier revision had one, justified by a claim that was
-# false — so a literal example written into a comment is a finding against this
-# file, correctly.
+# false — so a literal example in a comment is a finding against this file,
+# correctly. The marker regex is assembled at runtime for the same reason.
 set -uo pipefail
 
 cd "$(git rev-parse --show-toplevel)" || exit 1
@@ -33,86 +32,86 @@ fixture='tests/privacy-fixture.txt'
 
 # Value shapes: meaningful in any file, prose included.
 value_scope=(.)
-value_labels=(
-    'disk or filesystem UUID — name the device by label instead'
-    'MAC address'
-    'private IPv4 address'
-)
-value_patterns=(
-    '[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
-    '([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}'
-    '(^|[^0-9.])(10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}|192\.168\.[0-9]{1,3}\.[0-9]{1,3}|172\.(1[6-9]|2[0-9]|3[01])\.[0-9]{1,3}\.[0-9]{1,3})([^0-9]|$)'
-)
 
 # Assignments: skipped in Markdown, where naming an option is prose rather than
-# a leak. Everywhere else, not just *.nix — this host's wireless secret would
-# live in an iwd `.psk` or a `wpa_supplicant.conf`, neither of which is Nix.
-#
-# No leading \b anywhere: a preceding underscore or quote defeats the boundary,
-# so an underscore-prefixed or quoted attribute name would pass. Matching each
-# literal as a substring instead also covers the underscored wpa spelling.
+# a leak. Everywhere else, not just Nix — this host's wireless secret would live
+# in an iwd `.psk` or a `wpa_supplicant.conf`, neither of which is Nix.
 option_scope=(. ':(exclude)*.md')
-option_labels=(
-    'wireless passphrase or pre-shared key'
-    'wireless network block or SSID'
-    'plaintext password option'
-    'password hash — publish the file reference, not the hash'
+
+# key|label|regex. The key is what an exemption marker must name, so a line
+# waved through for one shape cannot silently hide a different one later.
+value_checks=(
+  'uuid|disk or filesystem UUID — name the device by label instead|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+  'mac-colon|MAC address, colon-separated|([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}'
+  'mac-dash|MAC address, dash-separated|([0-9a-fA-F]{2}-){5}[0-9a-fA-F]{2}'
+  'ipv4-10|private IPv4, RFC1918 ten-dot range|(^|[^0-9.])10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}([^0-9]|$)'
+  'ipv4-192|private IPv4, RFC1918 192.168 range|(^|[^0-9.])192\.168\.[0-9]{1,3}\.[0-9]{1,3}([^0-9]|$)'
+  'ipv4-172|private IPv4, RFC1918 172.16-31 range|(^|[^0-9.])172\.(1[6-9]|2[0-9]|3[01])\.[0-9]{1,3}\.[0-9]{1,3}([^0-9]|$)'
+  'ipv4-cgnat|CGNAT 100.64-127 range — a tailnet address names a specific machine|(^|[^0-9.])100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.[0-9]{1,3}\.[0-9]{1,3}([^0-9]|$)'
+  'ipv4-linklocal|link-local 169.254 range|(^|[^0-9.])169\.254\.[0-9]{1,3}\.[0-9]{1,3}([^0-9]|$)'
+  'ipv6-ula|IPv6 unique local address, fd00::/8|(^|[^0-9a-fA-F:])fd[0-9a-fA-F]{2}:[0-9a-fA-F]{0,4}:[0-9a-fA-F:]+'
 )
-option_patterns=(
-    '(psk(Raw)?|[Pp]assphrase|wpaPassword)"?[[:space:]]*='
-    '(wireless\.networks|[Ss][Ss][Ii][Dd]"?[[:space:]]*=)'
-    'password"?[[:space:]]*='
-    '(initialHashedPassword|hashedPassword)"?[[:space:]]*='
+
+option_checks=(
+  'psk|wireless pre-shared key|psk"?[[:space:]]*='
+  'pskraw|wireless pre-shared key, raw|pskRaw"?[[:space:]]*='
+  'passphrase|wireless passphrase — how iwd spells it|[Pp]assphrase"?[[:space:]]*='
+  'wpapassword|hostapd wpaPassword|wpaPassword"?[[:space:]]*='
+  'wireless-networks|wireless network block — carries an SSID|wireless\.networks'
+  'ssid|SSID assignment|[Ss][Ss][Ii][Dd]"?[[:space:]]*='
+  'password|plaintext password option|password"?[[:space:]]*='
+  'hashedpassword|password hash — publish the file reference, not the hash|hashedPassword"?[[:space:]]*='
+  'initialhashedpassword|initial password hash|initialHashedPassword"?[[:space:]]*='
 )
 
 status=0
 
-# Assembled rather than written out, so this file does not contain the marker
-# in the form it matches and count itself as an exemption. Reason required:
-# a bare marker exempts nothing.
-marker_re="# $(printf 'privacy')-ok:[[:space:]]*[^[:space:]]"
+# Assembled so this file does not contain the marker in the form it matches.
+# Requires a reason, and requires the marker to run to end of line with no
+# quote after it — otherwise a marker inside a Nix string value would exempt
+# the value it sits in, which is not a comment at all.
+mk="$(printf 'privacy')-ok"
+marker_of() { printf '#[[:space:]]*%s\\[%s\\]:[[:space:]]*[^"[:space:]][^"]*$' "$mk" "$1"; }
 
-# `= "!"`, `= "*"` and `= null` are how NixOS locks an account and carry no
-# secret. Firing there would fire precisely when the config is hardened.
-drop_exempt() {
-    local kept
-    kept=$(grep -vE "${marker_re}|=[[:space:]]*(null|\"!\"|\"\\*\")[[:space:]]*;?[[:space:]]*\$" || true)
-    printf '%s' "$kept"
-}
+report() { printf 'check-privacy: %s\n%s\n\n' "$1" "$2" >&2; status=1; }
 
-report() {
-    printf 'check-privacy: %s\n%s\n\n' "$1" "$2" >&2
-    status=1
-}
+# `= "!"`, `= "*"` and `= null` lock an account and carry no secret. Applied
+# only to the hash checks: no UUID, MAC or address can legitimately hold those
+# values, so widening it elsewhere would buy nothing and swallow a real finding
+# sharing a line with an unrelated null.
+lock_re='=[[:space:]]*(null|"!"|"\*")[[:space:]]*;?[[:space:]]*$'
 
-scan_set() {
-    local -n labels=$1 pats=$2 scope=$3
-    local i raw hits
-    for i in "${!pats[@]}"; do
-        raw=$(git grep -nIE -e "${pats[$i]}" -- "${scope[@]}" ":(exclude)${fixture}" || true)
-        hits=$(printf '%s' "$raw" | drop_exempt)
-        if [ -n "$hits" ]; then
-            report "${labels[$i]}" "$hits"
-        else
-            printf '  ok  %s\n' "${labels[$i]}"
-        fi
+run_checks() {
+    local -n checks=$1 scope=$2
+    local entry key label pat raw hits
+    for entry in "${checks[@]}"; do
+        IFS='|' read -r key label pat <<<"$entry"
+        raw=$(git grep -nIE -e "$pat" -- "${scope[@]}" ":(exclude)${fixture}" || true)
+        hits=$(printf '%s' "$raw" | { grep -vE "$(marker_of "$key")" || true; })
+        case $key in
+            hashedpassword|initialhashedpassword|password)
+                hits=$(printf '%s' "$hits" | { grep -vE "$lock_re" || true; }) ;;
+        esac
+        if [ -n "$hits" ]; then report "$label" "$hits"; else printf '  ok  %s\n' "$label"; fi
     done
 }
 
-scan_set value_labels value_patterns value_scope
-scan_set option_labels option_patterns option_scope
+run_checks value_checks value_scope
+run_checks option_checks option_scope
 
 # initialPassword seeds a VM account that has none yet, and the config
-# documents replacing it at first login. Test the assigned *value*: matching
-# the whole grep line lets a comment or a sibling attribute mentioning the
-# placeholder suppress a real password on the same line.
-seeds=$(git grep -nIE -e 'initialPassword"?[[:space:]]*=' -- "${option_scope[@]}" ":(exclude)${fixture}" || true)
-seeds=$(printf '%s' "$seeds" | drop_exempt)
+# documents replacing it at first login. Every assignment on the line is
+# tested, not one: a greedy match takes the last, so a placeholder later on the
+# line would mask a real password earlier on it.
+ip_assign='initialPassword"?[[:space:]]*='
+seeds=$(git grep -nIE -e "$ip_assign" -- "${option_scope[@]}" ":(exclude)${fixture}" || true)
+seeds=$(printf '%s' "$seeds" | { grep -vE "$(marker_of initialpassword)" || true; })
 bad=''
 while IFS= read -r hit; do
     [ -n "$hit" ] || continue
-    value=$(printf '%s' "$hit" | sed -nE 's/.*initialPassword"?[[:space:]]*=[[:space:]]*"([^"]*)".*/\1/p')
-    [ "$value" = changeme ] && continue
+    n_assign=$(printf '%s' "$hit" | grep -oE "$ip_assign" | wc -l)
+    n_ok=$(printf '%s' "$hit" | grep -oE "${ip_assign}[[:space:]]*\"changeme\"" | wc -l)
+    [ "$n_assign" -eq "$n_ok" ] && continue
     bad+="${hit}"$'\n'
 done <<<"$seeds"
 if [ -n "$bad" ]; then
@@ -121,41 +120,46 @@ else
     printf '  ok  initialPassword is absent or the documented placeholder\n'
 fi
 
-# Positive control. Each pattern must match the fixture *through the same
-# pathspec the real scan uses* — so a broken scope fails here rather than
-# quietly scanning nothing. Asserting the pattern alone would not: the fixture
-# would still match while the real scan reached no files at all.
+# Positive control. Each check must match the fixture *through the pathspec its
+# own scan uses*, so a broken scope fails here rather than quietly reaching no
+# files. One assertion per shape, which is only meaningful because no check is
+# an alternation.
 missed=()
 control() {
-    local -n labels=$1 pats=$2 scope=$3
-    local i files
-    for i in "${!pats[@]}"; do
-        files=$(git grep -lIE -e "${pats[$i]}" -- "${scope[@]}" || true)
+    local -n checks=$1 scope=$2
+    local entry key label pat files
+    for entry in "${checks[@]}"; do
+        IFS='|' read -r key label pat <<<"$entry"
+        files=$(git grep -lIE -e "$pat" -- "${scope[@]}" || true)
         case $'\n'"$files"$'\n' in
             *$'\n'"$fixture"$'\n'*) ;;
-            *) missed+=("${labels[$i]}") ;;
+            *) missed+=("$key") ;;
         esac
     done
 }
-control value_labels value_patterns value_scope
-control option_labels option_patterns option_scope
-# Not `| grep -q`: grep exits on the first hit, git grep takes SIGPIPE and dies
-# 141, and pipefail returns that — false exactly when the pattern matches.
-ip_files=$(git grep -lIE -e 'initialPassword"?[[:space:]]*=' -- "${option_scope[@]}" || true)
+control value_checks value_scope
+control option_checks option_scope
+ip_files=$(git grep -lIE -e "$ip_assign" -- "${option_scope[@]}" || true)
 case $'\n'"$ip_files"$'\n' in
     *$'\n'"$fixture"$'\n'*) ;;
-    *) missed+=('initialPassword') ;;
+    *) missed+=('initialpassword') ;;
 esac
 
 if [ ${#missed[@]} -gt 0 ]; then
-    printf 'check-privacy: %s is untracked, or the scan pathspec no longer reaches it; unexercised: %s\n' \
+    printf 'check-privacy: %s is untracked, or a scan pathspec no longer reaches it; unexercised: %s\n' \
         "$fixture" "${missed[*]}" >&2
     exit 1
 fi
 
-exemptions=$(git grep -cIE -e "$marker_re" -- . || true)
-[ -n "$exemptions" ] && printf 'check-privacy: exemptions in force:\n%s\n' "$exemptions"
+# Printed on success too: an exemption is a hole, and a growing count should be
+# visible in CI output rather than discoverable only by grep.
+ex=$(git grep -cIE -e "#[[:space:]]*${mk}\[" -- . || true)
+if [ -n "$ex" ]; then
+    printf 'check-privacy: exemptions in force:\n%s\n' "$ex"
+else
+    printf '  ok  no exemption markers in the tree\n'
+fi
 
-[ "$status" -eq 0 ] && printf 'check-privacy: clean; %d checks, all exercised against %s\n' \
-    "$(( ${#value_patterns[@]} + ${#option_patterns[@]} + 1 ))" "$fixture"
+[ "$status" -eq 0 ] && printf 'check-privacy: clean; %d shapes, each exercised against %s\n' \
+    "$(( ${#value_checks[@]} + ${#option_checks[@]} + 1 ))" "$fixture"
 exit "$status"
