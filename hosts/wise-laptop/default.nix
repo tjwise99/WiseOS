@@ -1,4 +1,31 @@
-{ pkgs, ... }:
+{ pkgs, lib, ... }:
+
+let
+  # theme.sh's gtk source reads the active GTK theme through gi, which needs the
+  # bindings and the introspection typelibs for everything it imports. Wrapped
+  # rather than exported into the session: the typelibs live in each library's
+  # `out` output, and environment.systemPackages installs the default one —
+  # which for pango and glib is `bin` and carries none. A GI_TYPELIB_PATH
+  # pointing at the system profile therefore finds Gtk and not Pango, and
+  # from_gtk fails on an override assertion rather than on anything legible.
+  gtkPython = pkgs.symlinkJoin {
+    name = "python3-gtk";
+    paths = [ (pkgs.python3.withPackages (ps: [ ps.pygobject3 ])) ];
+    nativeBuildInputs = [ pkgs.makeWrapper ];
+    postBuild = ''
+      wrapProgram $out/bin/python3 --prefix GI_TYPELIB_PATH : \
+        "${lib.makeSearchPathOutput "out" "lib/girepository-1.0" [
+          pkgs.gtk3
+          pkgs.glib
+          pkgs.pango
+          pkgs.at-spi2-core
+          pkgs.gdk-pixbuf
+          pkgs.harfbuzz
+          pkgs.gobject-introspection
+        ]}"
+    '';
+  };
+in
 
 {
   imports = [ ./hardware-configuration.nix ];
@@ -73,7 +100,7 @@
     dejavu_fonts
     noto-fonts
     noto-fonts-color-emoji
-  ];  
+  ];
 
   environment.systemPackages = with pkgs; [
     git
@@ -83,7 +110,7 @@
     # and NixOS's /etc/zshenv sources /etc/set-environment, which assigns PATH
     # rather than extending it — so the unit's own `path` is discarded as soon
     # as a shell step runs. Only what is declared here survives that.
-    python3
+    gtkPython
     gnumake
     gcc
     gnutar
@@ -93,7 +120,10 @@
 
     # Desktop — derived from the exec targets in dotfiles/i3/config
     alacritty
-    polybar
+    (polybar.override {
+      i3Support = true;
+      pulseSupport = true;
+    })
     picom
     rofi
     dunst
@@ -110,6 +140,9 @@
     brave
     opencloud-desktop
     xrdb
+    libnotify
+    betterlockscreen
+    pulseaudio
   ];
 
   # First-boot provisioning: clone the dotfiles repo and run its installer once.
@@ -121,7 +154,7 @@
     wantedBy = [ "multi-user.target" ];
     after = [ "nix-daemon.socket" ];
 
-    path = with pkgs; [ bash python3 git openssh curl unzip gnutar gzip gnumake gcc coreutils ];
+    path = with pkgs; [ bash python3 git openssh curl unzip gnutar gzip gnumake gcc coreutils i3 ];
 
     serviceConfig = {
       Type = "oneshot";
@@ -151,6 +184,19 @@
       if [ ! -e "$HOME/.dotfiles-provisioned" ]; then
         cd dotfiles && ./install && touch "$HOME/.dotfiles-provisioned"
       fi
+
+      # The session starts while this unit is still compiling, so i3 came up
+      # before ~/.config/i3 existed and loaded the packaged config instead —
+      # no bar, no theme, and nothing to run theme/session.sh before the next
+      # login. restart rather than reload: reload re-reads the file i3 already
+      # has, which is the wrong one; restart redoes the config search.
+      #
+      # Addressed by socket rather than DISPLAY so it needs no X authority. No
+      # session means no socket, and this is then a no-op.
+      sock="$(ls -t /run/user/$(id -u)/i3/ipc-socket.* 2>/dev/null | head -1)"
+      if [ -n "$sock" ]; then
+        I3SOCK="$sock" i3-msg restart >/dev/null 2>&1 || true
+      fi
     '';
   };
 
@@ -171,6 +217,20 @@
     services.openssh.enable = true;
     virtualisation.forwardPorts = [
       { from = "host"; host.port = 2222; guest.port = 22; }
+    ];
+
+    # Log straight into i3. Without a session nothing execs theme/session.sh, so
+    # the whole theme pipeline — the part with no equivalent on the metal path
+    # yet — cannot be exercised here at all.
+    services.displayManager.autoLogin = {
+      enable = true;
+      user = "wise";
+    };
+
+    # The laptop's own key, so the forwarded port is reachable without a tty to
+    # type initialPassword into. That is what makes the VM scriptable.
+    users.users.wise.openssh.authorizedKeys.keys = [
+      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIApZ86+DW+jVdB2ybqMxM3GwfacbqO07r8Q17z0w9JSc tjwise99@wise-laptop"
     ];
   };
 

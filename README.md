@@ -155,6 +155,12 @@ does not exist. `programs.nix-ld.enable` supplies a loader; its default library 
 what gives the laptop and the WSL box one pinned version, and migrating only this host breaks that
 parity.
 
+**The session beats provisioning, so i3 loads the wrong config.** Autologin starts i3 while
+`dotfiles-provision` is still compiling, before `~/.config/i3` exists, so i3 falls back to the
+packaged config — no bar, no theme, and nothing to run `theme/session.sh` until the next login. The
+unit restarts i3 once the tree is in place. `restart`, not `reload`: reload re-reads the file i3
+already loaded, which is the store path, so it changes nothing while appearing to work.
+
 **A hardcoded output name is fatal, not cosmetic.** `theme/polybar.ini.tmpl` named `eDP-1`; polybar
 exits with `Monitor not found or disconnected` rather than falling back, so the bar is absent
 entirely. Fixed upstream in dotfiles as `${env:MONITOR:}`.
@@ -164,13 +170,6 @@ entirely. Fixed upstream in dotfiles as `${env:MONITOR:}`.
 
 ## Open
 
-- **The wallpaper is an undeclared dependency of the whole theme pipeline.** `i3/config` execs
-  `wal -i ~/Pictures/wallpaper.jpg`; without it there is no palette, so no rendered configs and no
-  bar. It is not in either repo and was copied in by hand. Commit it, put it in `local/`, or have
-  provisioning fetch it.
-- **`theme.sh` never runs itself.** Its output persists across reboots, so it needs running exactly
-  once per install — and that once currently has no home. Natural fit for provisioning, but blocked
-  on the wallpaper.
 - **`initialPassword = "changeme"`** is in a public repo and would become the real login password on
   metal. Not `hashedPassword`: a crypt hash is offline-crackable once published, Nix copies it
   world-readable into `/nix/store` besides, and `just check-privacy` rejects it. Set it at install

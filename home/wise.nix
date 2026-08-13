@@ -1,9 +1,13 @@
 { pkgs, ... }:
 
-{
-  home.username = "wise";
-  home.homeDirectory = "/home/wise";
+# Userland, shared by every host: the Manjaro laptop, the Ubuntu WSL box, and
+# the NixOS machine that replaces the first. Nothing here may need X, a radio or
+# particular hardware — that belongs in hosts/wise-laptop.
+#
+# home.username and home.homeDirectory are absent on purpose: flake.nix supplies
+# them per output, and the NixOS module derives them from users.users.wise.
 
+{
   # Packages only, deliberately.
   #
   # Every dotfile in $HOME is a Dotbot symlink into ~/dotfiles. Home Manager
@@ -12,15 +16,47 @@
   # block that writes config. Migrating a path means removing it from
   # profiles/base.conf.yaml in the same change — one at a time, on purpose.
   home.packages = with pkgs; [
-    hello
     bat
     tree
+    htop
+    fastfetch
+    zenity               # backs SUDO_ASKPASS/SSH_ASKPASS in shell/env.sh
+
+    claude-code
+
+    # Also pinned by asdf in ~/.tool-versions, and shadowed by these: dotfiles'
+    # shell/env.sh puts Nix ahead of asdf. Dropping the asdf side waits on the
+    # WSL box running Home Manager.
+    gitleaks
+    gh
+    jq
+    just
+    ripgrep
+    fzf
+    zoxide
+    delta
+
+    # ranger and its previews
+    ranger
+    highlight            # source code
+    poppler-utils        # pdftotext
+    ueberzugpp           # image preview backend
+    imagemagick          # convert
+    ffmpegthumbnailer    # video
+    mediainfo
+    exiftool
+    atool                # archive listing
+    p7zip                # 7z
+    catdoc               # .doc
+    odt2txt              # .odt
+    xlsx2csv             # .xlsx
   ];
 
   programs.home-manager.enable = true;
- 
+
   # silence the news alerts that pop up when rebuilding
   news.display = "silent";
+
   # The release whose defaults this config was written against. It is not a
   # version to bump for newness — changing it opts into changed defaults.
   home.stateVersion = "26.05";
