@@ -1,0 +1,3 @@
+# Normalise tracked text to LF on commit, whatever a contributor's autocrlf
+# says. Structural rather than a check: there is nothing left to catch.
+* text=auto eol=lf

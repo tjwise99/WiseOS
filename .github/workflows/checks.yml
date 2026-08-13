@@ -1,0 +1,32 @@
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      # `just verify` rather than a step per check: the recipe is the list, so
+      # CI cannot fall behind it. just and gitleaks come from the same locked
+      # nixpkgs the checks themselves use.
+      - name: Everything `just verify` runs
+        run: |
+          pin=$(scripts/nixpkgs-pin.sh)
+          nix shell "$pin#just" "$pin#gitleaks" -c just verify

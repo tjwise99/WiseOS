@@ -1,0 +1,5 @@
+# repeated_keys objects to `services.xserver.enable` sitting beside
+# `services.resolved.enable` and wants them nested. That flat, one-option-per-
+# line style is how NixOS configuration is written and read; every one of this
+# lint's reports here was that pattern and nothing else.
+disabled = ["repeated_keys"]
