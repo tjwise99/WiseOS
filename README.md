@@ -6,7 +6,9 @@ is eventually meant to replace.
 The point of the layout is that nothing here has to wait for a NixOS machine to exist. Home Manager
 runs against Manjaro today, and `nixos-rebuild build-vm` boots the full system config in QEMU from
 the same flake. When the metal install happens, the only file that changes is
-`hosts/wise-laptop/hardware-configuration.nix`.
+`hosts/wise-laptop/hardware-configuration.nix` — and `nixos-generate-config` writes that file with
+`/dev/disk/by-uuid/` devices, which `just check-privacy` rejects. Reduce them to labels, as the
+placeholder already does, before committing it.
 
 ## Why this is not in `dotfiles`
 
@@ -37,6 +39,7 @@ argument for cohousing is atomic commits when a package moves from `packages/man
 | `flake.nix` | Inputs and the two outputs, sharing one nixpkgs pin |
 | `home/wise.nix` | Home Manager — runs on Manjaro now, carries over to NixOS |
 | `hosts/wise-laptop/` | The system config, and the hardware file the installer regenerates |
+| `justfile`, `scripts/` | The checks, and `just verify` — the one recipe CI runs |
 
 ## The two outputs
 
@@ -50,6 +53,28 @@ nixos-rebuild build-vm --flake .#wise-laptop # build a bootable QEMU VM, then ./
 `nixos-rebuild build-vm` needs no NixOS and no root. The QEMU module overrides `fileSystems` with
 `mkVMOverride`, which is why the placeholder devices in `hardware-configuration.nix` do not matter
 in a VM.
+
+## Checks
+
+`just verify` — CI runs this one recipe, so the two cannot drift. `just --list` names each check.
+
+Nothing builds. Every output is evaluated to a derivation path, which catches a misspelled option or
+a missing module in about a minute; the build itself is exercised by `nixos-rebuild build-vm` above.
+Output names are discovered rather than listed, so a host added to `flake.nix` is covered without
+touching the check.
+
+`check-privacy` is the one worth knowing about, because this repo is public and a credential scanner
+cannot see what leaks here: a disk UUID, an SSID or a wireless passphrase is not credential-shaped,
+and together they fingerprint a machine and its network.
+
+**Run `just check-privacy` for what it enforces — it prints every check by name.** No list is kept
+here on purpose. Nothing compares a list in this file to the patterns in the script, so a copy goes
+stale the first time a pattern is added, with nothing to say so; a review of this repo found the
+justfile and this README had already drifted apart from the script in different directions, each
+omitting the one credential the config actually contains.
+
+It is a denylist and fails open on anything nobody listed. Encrypting secrets at rest is the control
+that does not depend on a pattern, tracked as issue #4 adopt sops-nix.
 
 ## Home Manager owns packages, not files
 
@@ -147,7 +172,10 @@ entirely. Fixed upstream in dotfiles as `${env:MONITOR:}`.
   once per install — and that once currently has no home. Natural fit for provisioning, but blocked
   on the wallpaper.
 - **`initialPassword = "changeme"`** is in a public repo and would become the real login password on
-  metal. Replace with `hashedPassword`, or set it at install time.
+  metal. Not `hashedPassword`: a crypt hash is offline-crackable once published, Nix copies it
+  world-readable into `/nix/store` besides, and `just check-privacy` rejects it. Set it at install
+  time, or point `hashedPasswordFile` at `/run/secrets/` — which is what issue #4 adopt sops-nix
+  builds.
 - **Disk layout for metal.** Wipe Manjaro or shrink for dual-boot, plus a backup either way. The ESP
   is 512M, which is tight to share with another distro's kernels — `configurationLimit` is already
   set to 10 for this reason.

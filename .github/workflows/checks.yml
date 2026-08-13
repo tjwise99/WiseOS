@@ -1,0 +1,40 @@
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      # Full history: check-secrets scans commits as well as the worktree, and
+      # a shallow clone would leave it scanning one.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: cachix/install-nix-action@630ae543ea3a38a9a4166f03376c02c50f408342 # v31.11.0
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      # `just verify` rather than a step per check, so CI cannot fall behind
+      # the recipe; check-recipes keeps the recipe from falling behind the
+      # justfile. Reading the pin needs a jq before there is a pinned one to
+      # use, so the runner's is asserted rather than assumed; everything after
+      # that comes from the locked nixpkgs, including the jq the checks run.
+      - name: Everything `just verify` runs
+        run: |
+          command -v jq >/dev/null || { echo "no jq on the runner image"; exit 1; }
+          pin=$(scripts/nixpkgs-pin.sh)
+          nix shell "$pin#just" "$pin#gitleaks" "$pin#jq" -c just verify

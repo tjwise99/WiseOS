@@ -1,0 +1,44 @@
+Positive control for scripts/check-privacy.sh.
+
+Written from how a secret would actually get committed, and the patterns written
+to match this — not the other way round. Deriving the specimen from the regex is
+how the SSID hole got in: the pattern required a dot after `networks`, the
+specimen was written to have one, and both agreed nothing was wrong while the
+attrset form went straight through.
+
+Every check in the script must match something here, through the same pathspec
+its real scan uses. Each check is one shape, never an alternation, so one
+specimen per check actually covers that check — an alternation would let a dead
+branch hide behind a live sibling, which is how four wireless spellings went
+unguarded.
+
+Excluded from the real scan. Invented values, matched by shape alone.
+
+  # --- wireless, in the forms a person writes them -----------------------
+  networking.wireless.networks = { "My Home 5G" = { psk = "example-not-real"; }; };
+  networking.wireless.networks."Cafe WiFi".pskRaw = "0011aabbccdd";
+  SSID = "ExampleNet";
+
+  # iwd, which is what this host runs: /var/lib/iwd/<name>.psk
+  [Security]
+  Passphrase=example-not-a-real-key
+
+  # hostapd
+  wpaPassword = "example-not-a-real-key";
+
+  # --- accounts ----------------------------------------------------------
+  users.users.example.password = "example-not-a-real-password";
+  users.users.example.hashedPassword = "$6$example$notarealhash";
+  users.users.example.initialHashedPassword = "$6$example$notarealhash";
+  initialPassword = "example-not-the-placeholder";
+
+  # --- machine and network identity --------------------------------------
+  device     = "/dev/disk/by-uuid/6f3c1b2a-9d4e-4f8b-8c1d-2e5a7b9c0d1f";
+  macColon   = "de:ad:be:ef:12:34";
+  macDash    = "DE-AD-BE-EF-12-34";
+  gateway10  = "10.11.12.13";
+  gateway192 = "192.168.1.1";
+  gateway172 = "172.20.30.40";
+  tailnet    = "100.101.102.103";
+  linkLocal  = "169.254.1.5";
+  ula        = "fd12:3456:789a::1";
