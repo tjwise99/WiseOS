@@ -73,7 +73,25 @@ status=0
 mk="$(printf 'privacy')-ok"
 marker_of() { printf '#[[:space:]]*%s\\[%s\\]:[[:space:]]*[^"[:space:]][^"]*$' "$mk" "$1"; }
 
-report() { printf 'check-privacy: %s\n%s\n\n' "$1" "$2" >&2; status=1; }
+# The marker's spelling appears in no file — deliberately, since a file the scan
+# reads cannot contain it. So the finding carries it, keyed and ready to paste:
+# the only moment anyone needs it is the moment they are reading this.
+#
+# A hit in this file is the constraint above biting. The obvious repair is a
+# marker, which is the one repair that must not happen here — it would rebuild
+# the per-line self-exclusion this file must not have — so the finding names the
+# right one instead.
+self='scripts/check-privacy.sh'
+report() {
+    local label=$1 key=$2 hits=$3
+    printf 'check-privacy: %s\n%s\n' "$label" "$hits" >&2
+    printf '  exempt one line by ending it with: # %s[%s]: <reason>\n' "$mk" "$key" >&2
+    case $hits in
+        *"$self"*) printf '  %s is scanned like every other file. Put literal examples in %s, which is excluded from the scan — do not exempt a line here.\n' "$self" "$fixture" >&2 ;;
+    esac
+    printf '\n' >&2
+    status=1
+}
 
 # `= "!"`, `= "*"` and `= null` lock an account and carry no secret. Applied
 # only to the hash checks: no UUID, MAC or address can legitimately hold those
@@ -92,7 +110,7 @@ run_checks() {
             hashedpassword|initialhashedpassword|password)
                 hits=$(printf '%s' "$hits" | { grep -vE "$lock_re" || true; }) ;;
         esac
-        if [ -n "$hits" ]; then report "$label" "$hits"; else printf '  ok  %s\n' "$label"; fi
+        if [ -n "$hits" ]; then report "$label" "$key" "$hits"; else printf '  ok  %s\n' "$label"; fi
     done
 }
 
@@ -115,7 +133,8 @@ while IFS= read -r hit; do
     bad+="${hit}"$'\n'
 done <<<"$seeds"
 if [ -n "$bad" ]; then
-    report 'initialPassword set to something other than the documented placeholder' "${bad%$'\n'}"
+    report 'initialPassword set to something other than the documented placeholder' \
+        initialpassword "${bad%$'\n'}"
 else
     printf '  ok  initialPassword is absent or the documented placeholder\n'
 fi
