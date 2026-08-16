@@ -83,10 +83,15 @@ in
   programs.zsh.enable = true;
   programs.nix-ld.enable = true;
 
+  # Rootful docker for local container builds. The `docker` group on the wise
+  # user grants socket access without sudo. On the Manjaro install this is a
+  # hand-run `pacman -S docker`; here is where it survives the switch.
+  virtualisation.docker.enable = true;
+
   users.users.wise = {
     isNormalUser = true;
     description = "Wise";
-    extraGroups = [ "wheel" "video" "audio" ];
+    extraGroups = [ "wheel" "video" "audio" "docker" ];
     shell = pkgs.zsh;
 
     # Consumed once, at first activation, and only if the account has no
