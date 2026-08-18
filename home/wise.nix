@@ -24,6 +24,9 @@
 
     claude-code
 
+    # browser driving functionality
+    playwright-driver.browsers
+
     # Also pinned by asdf in ~/.tool-versions, and shadowed by these: dotfiles'
     # shell/env.sh puts Nix ahead of asdf. Dropping the asdf side waits on the
     # WSL box running Home Manager.
@@ -51,6 +54,11 @@
     odt2txt              # .odt
     xlsx2csv             # .xlsx
   ];
+
+ # Tell Playwright where to find the Nix-bundled browser binaries
+  home.sessionVariables = {
+    PLAYWRIGHT_BROWSERS_PATH = "${pkgs.playwright-driver.browsers}";
+   };
 
   programs.home-manager.enable = true;
 
