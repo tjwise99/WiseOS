@@ -73,8 +73,46 @@ stale the first time a pattern is added, with nothing to say so; a review of thi
 justfile and this README had already drifted apart from the script in different directions, each
 omitting the one credential the config actually contains.
 
-It is a denylist and fails open on anything nobody listed. Encrypting secrets at rest is the control
-that does not depend on a pattern, tracked as issue #4 adopt sops-nix.
+It is a denylist and fails open on anything nobody listed. The control that does not depend on a
+pattern — a secret with a correct encrypted home rather than a shape to be caught — is now in place
+with sops-nix; see [Secrets](#secrets).
+
+## Secrets
+
+`sops-nix` encrypts secrets at rest in the repo and decrypts them at activation into `/run` — never
+into the world-readable `/nix/store`, and never as plaintext in a committed file. Today there is one:
+`wise_password_hash`, the `wise` account's login hash, in `hosts/wise-laptop/secrets.yaml`.
+
+One age key does three jobs, and its private half is in the repo for none of them. It lives at
+`~/.config/sops/age/keys.txt` on this dev host, where the `sops` CLI uses it to edit the repo; the
+QEMU VM does not get it (see below); and on metal it is placed at `/var/lib/sops-nix/key.txt` at
+install time, which is where the running system reads it. `.sops.yaml` records only the *public* key.
+
+```sh
+# Edit or add a secret (opens the decrypted file in $EDITOR, re-encrypts on save):
+SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt \
+  nix shell nixpkgs#sops -c sops hosts/wise-laptop/secrets.yaml
+
+# Re-wrap every secret for a changed recipient list in .sops.yaml (no plaintext exposed):
+nix shell nixpkgs#sops -c sops updatekeys hosts/wise-laptop/secrets.yaml
+```
+
+The committed hash is the real `wise` login hash, encrypted at rest — only the age key decrypts it,
+so committing it to this public repo exposes nothing. Rotate it any time with the `sops` command
+above; to set it on a fresh checkout, see [`docs/install.md`](docs/install.md).
+
+The password is a per-user secret, so it is decrypted *before* users are created
+(`neededForUsers`), a phase that runs before systemd has mounted anything. The VM deliberately does
+not carry the secret — it could, over a stage-1 9p share of the host key, but that would pin this
+public config to one host's key path; it keeps `initialPassword = "changeme"` instead, and the metal
+install is where the real path runs, verified in `docs/install.md` before the reboot.
+
+## Installing on metal
+
+[`docs/install.md`](docs/install.md) is the runbook: what to save before wiping, the disk-layout
+decision (wipe vs dual-boot on the 512 M ESP), partitioning to the `nixos`/`BOOT` labels the config
+names, placing the age key, and the first-boot verification that the password decrypted without
+reaching the store.
 
 ## Home Manager owns packages, not files
 
@@ -170,13 +208,5 @@ entirely. Fixed upstream in dotfiles as `${env:MONITOR:}`.
 
 ## Open
 
-- **`initialPassword = "changeme"`** is in a public repo and would become the real login password on
-  metal. Not `hashedPassword`: a crypt hash is offline-crackable once published, Nix copies it
-  world-readable into `/nix/store` besides, and `just check-privacy` rejects it. Set it at install
-  time, or point `hashedPasswordFile` at `/run/secrets/` — which is what issue #4 adopt sops-nix
-  builds.
-- **Disk layout for metal.** Wipe Manjaro or shrink for dual-boot, plus a backup either way. The ESP
-  is 512M, which is tight to share with another distro's kernels — `configurationLimit` is already
-  set to 10 for this reason.
 - Wifi, backlight, suspend and Intel graphics remain untested: a VM has no radio and no real GPU.
   Their first real test is on hardware, from the installer USB where iterating is still possible.

@@ -18,6 +18,11 @@ check-secrets:
     gitleaks git . --no-banner --redact
 
 [group('checks')]
+[doc('Every sops-managed secret file is fully encrypted, not just carrying metadata')]
+check-sops:
+    bash scripts/check-sops.sh
+
+[group('checks')]
 [doc('statix and deadnix are clean against the locked nixpkgs')]
 check-lint:
     bash scripts/check-lint.sh
@@ -28,4 +33,4 @@ check-recipes:
     bash scripts/check-recipes.sh
 
 [doc('Everything CI runs. CI runs this recipe, so the two cannot drift')]
-verify: check-recipes check-privacy check-secrets check-lint check-eval
+verify: check-recipes check-privacy check-secrets check-sops check-lint check-eval

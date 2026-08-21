@@ -9,8 +9,12 @@
 # as well.
 #
 # This is a backstop and fails open by construction: a denylist cannot see a
-# shape nobody listed. The structural fix is encrypting secrets at rest with
-# sops-nix, tracked as issue #4.
+# shape nobody listed. Secrets that belong encrypted now have that structural
+# control — sops-nix, in hosts/wise-laptop/secrets.yaml, decrypted at activation
+# and never written to the store — and check-sops asserts those files are fully
+# encrypted rather than trusting they are. What backs this backstop is a secret
+# having a correct home to be in; this scan still catches a loose hash typed
+# into a committed file, which sops cannot prevent.
 #
 # It prints every check by name, so this script is the inventory and no
 # document has to carry a second copy to fall out of step with.
@@ -42,6 +46,11 @@ option_scope=(. ':(exclude)*.md')
 # waved through for one shape cannot silently hide a different one later.
 value_checks=(
   'uuid|disk or filesystem UUID — name the device by label instead|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+  # A FAT/vfat volume serial — the ESP identifier nixos-generate-config emits,
+  # `XXXX-XXXX`, which the full-UUID shape above is too long to catch. Bounded
+  # by non-hex-non-dash so it cannot match a four-hex run inside a real UUID,
+  # whose groups are dash-delimited.
+  'fatserial|FAT volume serial — name the ESP by label instead|(^|[^0-9A-Fa-f-])[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}([^0-9A-Fa-f-]|$)'
   'mac-colon|MAC address, colon-separated|([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}'
   'mac-dash|MAC address, dash-separated|([0-9a-fA-F]{2}-){5}[0-9a-fA-F]{2}'
   'ipv4-10|private IPv4, RFC1918 ten-dot range|(^|[^0-9.])10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}([^0-9]|$)'
@@ -50,6 +59,15 @@ value_checks=(
   'ipv4-cgnat|CGNAT 100.64-127 range — a tailnet address names a specific machine|(^|[^0-9.])100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.[0-9]{1,3}\.[0-9]{1,3}([^0-9]|$)'
   'ipv4-linklocal|link-local 169.254 range|(^|[^0-9.])169\.254\.[0-9]{1,3}\.[0-9]{1,3}([^0-9]|$)'
   'ipv6-ula|IPv6 unique local address, fd00::/8|(^|[^0-9a-fA-F:])fd[0-9a-fA-F]{2}:[0-9a-fA-F]{0,4}:[0-9a-fA-F:]+'
+  # A plaintext unix password hash, matched by its Modular Crypt structure —
+  # `$id$…$<blob>` with a long trailing digest — not by enumerating schemes, so
+  # yescrypt, sha512crypt and bcrypt are one shape rather than a `|` list. This
+  # is a value check (scans prose too): a hash pasted into a doc or written into
+  # a `pkgs.writeText` leaks the same as one in a .nix option, and the =-keyed
+  # option checks below miss both. sops ENC[] blobs carry no `$`, so an
+  # encrypted secret does not match. Full-file encryption is check-sops's job;
+  # this catches the loose hash that never went near a secrets file.
+  'crypthash|plaintext unix password hash — publish the encrypted file reference, not the hash|\$[1-9a-z]{1,10}\$[A-Za-z0-9=,./+_-]{1,}\$[A-Za-z0-9./+]{16,}'
 )
 
 option_checks=(

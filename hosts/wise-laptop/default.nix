@@ -1,4 +1,4 @@
-{ pkgs, lib, ... }:
+{ config, pkgs, lib, ... }:
 
 let
   # theme.sh's gtk source reads the active GTK theme through gi, which needs the
@@ -39,6 +39,25 @@ in
   boot.loader.systemd-boot.configurationLimit = 10;
 
   networking.hostName = "wise-laptop";
+
+  # Secrets encrypted at rest in secrets.yaml, decrypted at activation into
+  # /run — never into the world-readable /nix/store (issue #4). The private key
+  # is placed out of band, once, at install time: docs/install.md copies it to
+  # the keyFile path below before nixos-install, so the very first boot can
+  # decrypt. The same admin key encrypts the repo from ~/.config/sops/age.
+  sops = {
+    defaultSopsFile = ./secrets.yaml;
+    age.keyFile = "/var/lib/sops-nix/key.txt";
+
+    # neededForUsers decrypts this one *before* users are created, into
+    # /run/secrets-for-users — the only phase early enough for hashedPasswordFile
+    # to read it. The VM does not carry this secret at all (see vmVariant): it
+    # could, over a stage-1 9p share of the host key, but that would pin this
+    # public config to one host's key path for a one-time check. The path is
+    # proven instead during the metal install, which docs/install.md verifies
+    # before the irreversible reboot.
+    secrets.wise_password_hash.neededForUsers = true;
+  };
 
   # Network stack carried over from dotfiles/system/, where the reasoning was
   # worked out against this hardware. iwd owns wlan0 outright, including DHCP,
@@ -94,10 +113,23 @@ in
     extraGroups = [ "wheel" "video" "audio" "docker" ];
     shell = pkgs.zsh;
 
-    # Consumed once, at first activation, and only if the account has no
-    # password yet. Fine for a VM; set a real one with passwd on first login,
-    # before this config ever reaches metal.
-    initialPassword = "changeme";
+    # Pinned so a retained /home partition's files stay owned by their account.
+    # NixOS's first normal user lands on 1000 anyway, but retaining /home means
+    # relying on that rather than declaring it (docs/install.md → Disk layout —
+    # keeping /home). The primary group stays the default `users` (gid 100);
+    # the retained home is owned by a per-user group, so its group is chowned at
+    # install (that runbook's step 7).
+    uid = 1000;
+
+    # The real login password on metal, decrypted from secrets.yaml. Guarded by
+    # mkIf on the secret's presence rather than referenced directly: the VM
+    # drops the secret (see vmVariant) and seeds initialPassword instead. mkIf
+    # is lazy on its body when false, so the reference is never forced there — a
+    # plain reference would be, because the module system discharges every
+    # definition's value before priorities are applied.
+    hashedPasswordFile =
+      lib.mkIf (config.sops.secrets ? wise_password_hash)
+        config.sops.secrets.wise_password_hash.path;
   };
 
   fonts.packages = with pkgs; [
@@ -208,6 +240,18 @@ in
   # VM-only. Applied when building system.build.vm, ignored on real hardware,
   # so it can live here permanently rather than being a branch to remember.
   virtualisation.vmVariant = {
+    # The VM does not carry the password secret. It could — QEMU shares are
+    # stage-1 mounts, so a 9p share of the host age key would reach
+    # sops-install-secrets — but wiring a host filesystem path into this public
+    # config to prove the path once is not worth it; the metal install proves it
+    # on real hardware, before its reboot. So drop the secret and seed the
+    # account the old way: the VM is for the desktop and theme pipeline,
+    # autologin needs no password, and with no secrets left sops-nix installs
+    # nothing and needs no key, so the VM boots clean. The metal
+    # hashedPasswordFile is dropped by its mkIf once the secret is gone.
+    sops.secrets = lib.mkForce { };
+    users.users.wise.initialPassword = "changeme";
+
     # The default is 1 core and 1024M. Compiling the Go and Rust toolchains in
     # that is slow at best, and low memory is a good candidate for the failure
     # you just hit — Go's runtime reports allocation and thread-creation
