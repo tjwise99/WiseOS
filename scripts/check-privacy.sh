@@ -46,6 +46,11 @@ option_scope=(. ':(exclude)*.md')
 # waved through for one shape cannot silently hide a different one later.
 value_checks=(
   'uuid|disk or filesystem UUID — name the device by label instead|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}'
+  # A FAT/vfat volume serial — the ESP identifier nixos-generate-config emits,
+  # `XXXX-XXXX`, which the full-UUID shape above is too long to catch. Bounded
+  # by non-hex-non-dash so it cannot match a four-hex run inside a real UUID,
+  # whose groups are dash-delimited.
+  'fatserial|FAT volume serial — name the ESP by label instead|(^|[^0-9A-Fa-f-])[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}([^0-9A-Fa-f-]|$)'
   'mac-colon|MAC address, colon-separated|([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}'
   'mac-dash|MAC address, dash-separated|([0-9a-fA-F]{2}-){5}[0-9a-fA-F]{2}'
   'ipv4-10|private IPv4, RFC1918 ten-dot range|(^|[^0-9.])10\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}([^0-9]|$)'

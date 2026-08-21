@@ -110,9 +110,10 @@ in
 
     # Pinned so a retained /home partition's files stay owned by their account.
     # NixOS's first normal user lands on 1000 anyway, but retaining /home means
-    # relying on that rather than declaring it (docs/install.md → Retaining a
-    # separate /home). The primary group stays the default `users` (gid 100);
-    # if the old home was made under a per-user group, chown is the fix.
+    # relying on that rather than declaring it (docs/install.md → Disk layout —
+    # keeping /home). The primary group stays the default `users` (gid 100);
+    # the retained home is owned by a per-user group, so its group is chowned at
+    # install (that runbook's step 7).
     uid = 1000;
 
     # The real login password on metal, decrypted from secrets.yaml. Guarded by

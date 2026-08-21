@@ -29,12 +29,12 @@ the only thing that survives that. Losing the key is recoverable but tedious (ge
 and you would be doing it from the installer. (This laptop's `/home` is plain ext4 — no LUKS unlock
 to worry about.)
 
-**Your real login password.** The committed `secrets.yaml` holds a placeholder — the hash of
-`changeme` — so the config evaluates and the VM builds. Replace it with the hash of a password you
-choose, *from Manjaro*, where `sops` and your key are already set up:
+**Your real login password.** This is already set — `secrets.yaml` holds your `wise` login hash,
+encrypted, and pushed. Nothing to do here unless you want to *change* it before installing, in which
+case, from Manjaro:
 
 ```sh
-# Type your password; copy the $y$... line it prints. -m yescrypt matches NixOS's default.
+# Type the new password; copy the $y$... line. -m yescrypt matches NixOS's default.
 nix shell nixpkgs#mkpasswd -c mkpasswd -m yescrypt
 
 # Open the encrypted file in $EDITOR, replace the wise_password_hash value, save.
@@ -42,11 +42,11 @@ SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt \
   nix shell nixpkgs#sops -c sops hosts/wise-laptop/secrets.yaml
 ```
 
-The value you paste is a hash, not the password, and the whole file is encrypted at rest — so commit
-and push it. The installer clones this repo, and it needs to clone the version with *your* hash:
+The value you paste is a hash, not the password, and the file is encrypted at rest — so commit and
+push it. The installer clones this repo, so it must clone the version with the hash you want:
 
 ```sh
-git add hosts/wise-laptop/secrets.yaml && git commit -m "secrets: set real wise password" && git push
+git add hosts/wise-laptop/secrets.yaml && git commit -m "secrets: rotate wise password" && git push
 ```
 
 **Anything else you care about.** The repo and `~/dotfiles` are on GitHub; `~/dotfiles/local/` is
@@ -76,15 +76,19 @@ Two things beyond "don't format p4":
   `by-label/BOOT`, and the `home` label you mount by). So labelling every partition is a required
   step below, not a nicety. `e2label`/`fatlabel`/`mkswap -L` rename a label and, for `/home`, touch
   no file data — but label `/home` while it is **unmounted**.
-- **Match the owner.** The config pins `wise` to `uid = 1000`, which a Manjaro first user almost
-  certainly is; confirm with `ls -ln /mnt/home` (read the numeric owner column). If it is 1000 the
-  files stay owned correctly. If the primary *group* differs — Manjaro's per-user group versus
-  NixOS's shared `users` (gid 100) — fix it once after install:
-  `nixos-enter --root /mnt -c 'chown -R wise:users /home/wise'`.
+- **Ownership needs a one-time fix.** `/home/wise` on this machine is owned `1000:1000` — uid 1000
+  (which the config pins, so that half matches) but *group* 1000, Manjaro's per-user `wise` group.
+  NixOS puts `wise` in the shared `users` group (gid 100), so every file's group would be wrong until
+  corrected. This is not conditional here; it is a required step, run in step 7 below.
 
 Back up `/home` anyway. A slip below — `mkfs` on p4 instead of p3 — erases it, and that is the one
 mistake this runbook cannot undo. (Wiping the whole disk instead, `/home` and all, is the same steps
 minus the "keep p4" care; it is not this laptop's plan and is not written out separately.)
+
+`/home` is 81% full, and 40 GB of that is `/home/timeshift` — Manjaro's snapshots, which NixOS does
+not use (it has boot generations instead). Once the new system is up and confirmed, `sudo rm -rf
+/home/timeshift` reclaims the space; the step-7 `chown` leaves it alone (it is root-owned, and only
+`/home/wise` is chowned).
 
 ## Install
 
@@ -199,10 +203,18 @@ likely cause is the key, so re-check the decrypt test above, then
 `nixos-rebuild switch` will **not** repair it: with `mutableUsers = true` the hash is written only at
 account creation, so once `wise` exists, only `passwd` changes it.
 
+**7. Fix `/home/wise` ownership** (retained-`/home` only). The files carry Manjaro's `wise:wise`
+group (gid 1000); NixOS puts `wise` in `users` (gid 100), so correct the group now, while the mount
+is still at `/mnt`:
+
+```sh
+nixos-enter --root /mnt -c 'chown -R wise:users /home/wise'
+```
+
 ## First boot
 
-Reboot and remove the USB. Log in as `wise` with the password you hashed into `secrets.yaml`. Then
-prove the secret path did what it claims — decrypted, and never in the store:
+Reboot and remove the USB. Log in as `wise` with your password. Then prove the secret path did what
+it claims — decrypted, and never in the store:
 
 ```sh
 sudo test -f /run/secrets-for-users/wise_password_hash && echo "decrypted at boot: yes"
@@ -210,9 +222,19 @@ grep -rl "$(sudo cat /run/secrets-for-users/wise_password_hash)" /nix/store 2>/d
   && echo "LEAKED INTO STORE" || echo "not in store: good"
 ```
 
-`dotfiles-provision` runs on first boot — it clones `dotfiles` over HTTPS and runs `./install` once,
-then restarts i3 so the bar and theme come up. It clones over HTTPS because a fresh machine has no
-SSH key, which means `tools/sync.sh` cannot push until you switch the remote:
+**Connect the network first.** iwd's saved wifi credentials lived on the old root, which you
+reformatted — so this boot has no network until you re-add one. `dotfiles-provision` needs it (it
+runs `dotfiles/install`, which fetches asdf runtimes), and it is a `oneshot` that retries for 90 s
+then gives up for good, so bring the network up promptly:
+
+```sh
+iwctl station wlan0 connect <SSID>     # or just plug in ethernet
+```
+
+`dotfiles-provision` then runs `dotfiles/install` and restarts i3 so the bar and theme come up. On
+this retained-`/home` install the `~/dotfiles` clone is already on `/home`, so the clone step is
+skipped, but `install` still runs (its `~/.dotfiles-provisioned` marker is not there yet). Its remote
+is still HTTPS, so `tools/sync.sh` cannot push until you switch it to SSH:
 
 ```sh
 git -C ~/dotfiles remote set-url origin git@github.com:tjwise99/dotfiles.git

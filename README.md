@@ -97,14 +97,15 @@ SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt \
 nix shell nixpkgs#sops -c sops updatekeys hosts/wise-laptop/secrets.yaml
 ```
 
-The committed hash is a **placeholder** — the hash of `changeme` — so the flake evaluates and the VM
-builds without anyone's real password. Replacing it with a real one is the first step of
-[`docs/install.md`](docs/install.md), done before the config reaches metal.
+The committed hash is the real `wise` login hash, encrypted at rest — only the age key decrypts it,
+so committing it to this public repo exposes nothing. Rotate it any time with the `sops` command
+above; to set it on a fresh checkout, see [`docs/install.md`](docs/install.md).
 
 The password is a per-user secret, so it is decrypted *before* users are created
-(`neededForUsers`), a phase that runs before systemd has mounted anything. That is why the VM cannot
-be handed the key over a share and keeps `initialPassword = "changeme"` instead: the metal first boot
-is where this path runs for real, and `docs/install.md` verifies it there.
+(`neededForUsers`), a phase that runs before systemd has mounted anything. The VM deliberately does
+not carry the secret — it could, over a stage-1 9p share of the host key, but that would pin this
+public config to one host's key path; it keeps `initialPassword = "changeme"` instead, and the metal
+install is where the real path runs, verified in `docs/install.md` before the reboot.
 
 ## Installing on metal
 
@@ -207,10 +208,5 @@ entirely. Fixed upstream in dotfiles as `${env:MONITOR:}`.
 
 ## Open
 
-- **The committed password hash is a placeholder** — the hash of `changeme`, encrypted so the flake
-  evaluates. It becomes a real login only after you replace it with your own, which is step one of
-  [`docs/install.md`](docs/install.md). The plaintext-`initialPassword` exposure that used to sit
-  here is closed: metal reads `hashedPasswordFile` from the sops secret, and `check-privacy` still
-  rejects an inline hash. See [Secrets](#secrets).
 - Wifi, backlight, suspend and Intel graphics remain untested: a VM has no radio and no real GPU.
   Their first real test is on hardware, from the installer USB where iterating is still possible.
