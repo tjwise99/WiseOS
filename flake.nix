@@ -11,9 +11,18 @@
       url = "github:nix-community/home-manager/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    # Secrets encrypted at rest, decrypted into /run/secrets at activation —
+    # never into the world-readable store. Follows this flake's nixpkgs for the
+    # same one-package-set reason as home-manager above. Only the NixOS output
+    # consumes it; the Home Manager outputs carry no secrets.
+    sops-nix = {
+      url = "github:Mic92/sops-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { nixpkgs, home-manager, ... }:
+  outputs = { nixpkgs, home-manager, sops-nix, ... }:
     let
       system = "x86_64-linux";
       # One list, reaching both outputs. They take it by different routes:
@@ -68,6 +77,7 @@
         modules = [
           ./hosts/wise-laptop
           { nixpkgs.config.allowUnfreePredicate = allowUnfreePredicate; }
+          sops-nix.nixosModules.sops
           home-manager.nixosModules.home-manager
           {
             home-manager.useGlobalPkgs = true;

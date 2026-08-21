@@ -1,0 +1,21 @@
+# sops recipients and per-file creation rules.
+#
+# `keys` lists the age public keys a secret may be encrypted to; the private
+# halves never appear here or anywhere in this repo. The admin key below is
+# generated once with `age-keygen` and lives only at
+# `~/.config/sops/age/keys.txt` on the dev host and, after install, at
+# `/var/lib/sops-nix/key.txt` on the metal machine (see docs/install.md). One
+# key serves all three consumers: the `sops` CLI editing this repo, the QEMU VM
+# reading it over a 9p mount, and the installed system decrypting at boot.
+#
+# To rotate or move to a new machine's key: add its public key here, then
+# `sops updatekeys hosts/wise-laptop/secrets.yaml` to re-wrap the data key. No
+# plaintext is exposed by that operation.
+keys:
+  - &admin age15f8n2wpt3clttwr9np0he86lwdq0pp7rvycr6pu20kv2katndemszla7r9
+
+creation_rules:
+  - path_regex: hosts/wise-laptop/secrets\.yaml$
+    key_groups:
+      - age:
+          - *admin

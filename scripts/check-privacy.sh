@@ -9,8 +9,11 @@
 # as well.
 #
 # This is a backstop and fails open by construction: a denylist cannot see a
-# shape nobody listed. The structural fix is encrypting secrets at rest with
-# sops-nix, tracked as issue #4.
+# shape nobody listed. Secrets that belong encrypted now have that structural
+# control — sops-nix, in hosts/wise-laptop/secrets.yaml, decrypted at
+# activation and never written to the store. What backs this backstop is that a
+# secret has a correct home to be in; this scan still catches one typed in
+# plaintext straight into a committed file, which sops cannot prevent.
 #
 # It prints every check by name, so this script is the inventory and no
 # document has to carry a second copy to fall out of step with.
@@ -169,6 +172,44 @@ if [ ${#missed[@]} -gt 0 ]; then
         "$fixture" "${missed[*]}" >&2
     exit 1
 fi
+
+# sops-managed secret files must actually be encrypted. This is the one
+# positive assertion in a file of denylists, and it exists because the denylist
+# cannot cover this: sops.validateSopsFiles does not reject a plaintext file at
+# eval, and a hash written in YAML `key: value` form is matched by none of the
+# option checks above, which all key on `=`. So a secret saved in the clear —
+# whether stripped of its sops metadata or with plaintext values under intact
+# metadata — would pass every other check and `nix eval` besides.
+#
+# A file is treated as a secret if it is named `*secrets.{yaml,yml,json}` (the
+# convention) OR already carries a `sops:` metadata block; either way it must be
+# encrypted. `.sops.yaml` is the recipient config, not a secret: it is neither
+# named `secrets.*` nor carries that block. Markdown is excluded so a doc that
+# shows `sops:` in an example is not mistaken for a secret.
+secret_files=$(
+    {
+        git ls-files -- '*secrets.yaml' '*secrets.yml' '*secrets.json'
+        git grep -lI -e '^sops:' -- . ':(exclude)*.md' 2>/dev/null || true
+    } | sort -u
+)
+while IFS= read -r f; do
+    [ -n "$f" ] || continue
+    meta=$(git grep -lI -e '^sops:' -- "$f" || true)
+    enc=$(git grep -lI -e 'ENC\[' -- "$f" || true)
+    plain=$(git grep -nIE -e '\$(1|2[abxy]|5|6|7|y|gy)\$' -- "$f" 2>/dev/null \
+        | { grep -vE 'ENC\[' || true; })
+    if [ -z "$meta" ] || [ -z "$enc" ]; then
+        printf 'check-privacy: %s is a secret file but not sops-encrypted (sops: metadata or ENC[] value absent)\n' "$f" >&2
+        status=1
+    elif [ -n "$plain" ]; then
+        printf 'check-privacy: %s has a plaintext hash outside an ENC[] value:\n%s\n' "$f" "$plain" >&2
+        status=1
+    else
+        printf '  ok  %s is sops-encrypted\n' "$f"
+    fi
+done <<EOF
+$secret_files
+EOF
 
 # Printed on success too: an exemption is a hole, and a growing count should be
 # visible in CI output rather than discoverable only by grep.

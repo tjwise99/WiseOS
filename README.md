@@ -73,8 +73,45 @@ stale the first time a pattern is added, with nothing to say so; a review of thi
 justfile and this README had already drifted apart from the script in different directions, each
 omitting the one credential the config actually contains.
 
-It is a denylist and fails open on anything nobody listed. Encrypting secrets at rest is the control
-that does not depend on a pattern, tracked as issue #4 adopt sops-nix.
+It is a denylist and fails open on anything nobody listed. The control that does not depend on a
+pattern — a secret with a correct encrypted home rather than a shape to be caught — is now in place
+with sops-nix; see [Secrets](#secrets).
+
+## Secrets
+
+`sops-nix` encrypts secrets at rest in the repo and decrypts them at activation into `/run` — never
+into the world-readable `/nix/store`, and never as plaintext in a committed file. Today there is one:
+`wise_password_hash`, the `wise` account's login hash, in `hosts/wise-laptop/secrets.yaml`.
+
+One age key does three jobs, and its private half is in the repo for none of them. It lives at
+`~/.config/sops/age/keys.txt` on this dev host, where the `sops` CLI uses it to edit the repo; the
+QEMU VM does not get it (see below); and on metal it is placed at `/var/lib/sops-nix/key.txt` at
+install time, which is where the running system reads it. `.sops.yaml` records only the *public* key.
+
+```sh
+# Edit or add a secret (opens the decrypted file in $EDITOR, re-encrypts on save):
+SOPS_AGE_KEY_FILE=~/.config/sops/age/keys.txt \
+  nix shell nixpkgs#sops -c sops hosts/wise-laptop/secrets.yaml
+
+# Re-wrap every secret for a changed recipient list in .sops.yaml (no plaintext exposed):
+nix shell nixpkgs#sops -c sops updatekeys hosts/wise-laptop/secrets.yaml
+```
+
+The committed hash is a **placeholder** — the hash of `changeme` — so the flake evaluates and the VM
+builds without anyone's real password. Replacing it with a real one is the first step of
+[`docs/install.md`](docs/install.md), done before the config reaches metal.
+
+The password is a per-user secret, so it is decrypted *before* users are created
+(`neededForUsers`), a phase that runs before systemd has mounted anything. That is why the VM cannot
+be handed the key over a share and keeps `initialPassword = "changeme"` instead: the metal first boot
+is where this path runs for real, and `docs/install.md` verifies it there.
+
+## Installing on metal
+
+[`docs/install.md`](docs/install.md) is the runbook: what to save before wiping, the disk-layout
+decision (wipe vs dual-boot on the 512 M ESP), partitioning to the `nixos`/`BOOT` labels the config
+names, placing the age key, and the first-boot verification that the password decrypted without
+reaching the store.
 
 ## Home Manager owns packages, not files
 
@@ -170,13 +207,10 @@ entirely. Fixed upstream in dotfiles as `${env:MONITOR:}`.
 
 ## Open
 
-- **`initialPassword = "changeme"`** is in a public repo and would become the real login password on
-  metal. Not `hashedPassword`: a crypt hash is offline-crackable once published, Nix copies it
-  world-readable into `/nix/store` besides, and `just check-privacy` rejects it. Set it at install
-  time, or point `hashedPasswordFile` at `/run/secrets/` — which is what issue #4 adopt sops-nix
-  builds.
-- **Disk layout for metal.** Wipe Manjaro or shrink for dual-boot, plus a backup either way. The ESP
-  is 512M, which is tight to share with another distro's kernels — `configurationLimit` is already
-  set to 10 for this reason.
+- **The committed password hash is a placeholder** — the hash of `changeme`, encrypted so the flake
+  evaluates. It becomes a real login only after you replace it with your own, which is step one of
+  [`docs/install.md`](docs/install.md). The plaintext-`initialPassword` exposure that used to sit
+  here is closed: metal reads `hashedPasswordFile` from the sops secret, and `check-privacy` still
+  rejects an inline hash. See [Secrets](#secrets).
 - Wifi, backlight, suspend and Intel graphics remain untested: a VM has no radio and no real GPU.
   Their first real test is on hardware, from the installer USB where iterating is still possible.
