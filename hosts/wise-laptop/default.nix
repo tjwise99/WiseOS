@@ -77,6 +77,14 @@ in
   networking.useDHCP = false;
   services.resolved.enable = true;
 
+  # iwd owns wlan0 outside networkd and the only networkd-managed link is the
+  # wired port, which is RequiredForOnline=no — so networkd never reaches an
+  # "online" state and systemd-networkd-wait-online times out at 120s on every
+  # boot, leaving the system degraded and every `nixos-rebuild switch` non-zero.
+  # Nothing orders on network-online.target here (dotfiles-provision retries
+  # instead), so there is nothing for it to gate.
+  systemd.network.wait-online.enable = false;
+
   systemd.network.networks."20-wired" = {
     # en* rather than a PCI-slot name: covers the predictable wired names
     # without reaching wlan0, docker0 or a veth pair, and survives a NIC swap.
