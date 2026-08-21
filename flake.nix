@@ -30,7 +30,10 @@
       # handed this as a module below; homeManagerConfiguration builds none and
       # requires a package set, so one is instantiated here.
       allowUnfreePredicate = pkg:
-        builtins.elem (nixpkgs.lib.getName pkg) [ "claude-code" ];
+        builtins.elem (nixpkgs.lib.getName pkg) [ 
+          "claude-code" 
+          "discord"
+        ];
 
       pkgs = import nixpkgs {
         inherit system;

@@ -183,6 +183,7 @@ in
     batsignal
     impala
     brave
+    discord
     opencloud-desktop
     xrdb
     libnotify
