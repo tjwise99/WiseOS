@@ -140,15 +140,28 @@ generated file before it goes in:
 - **Drop `configuration.nix`.** You do not need the generated `configuration.nix` at all — the flake
   is the configuration. Only the hardware file carries over.
 
-**4. Get the flake and your hardware file onto the target:**
+**4. Get the flake and your hardware file onto the target.** This config lives on the
+`feat/sops-nix-and-install-runbook` branch, not `main` — clone *that branch*, or you install a `main`
+that has neither sops nor your password (it still carries `initialPassword = "changeme"`). Installing
+off the branch first, then merging once it boots, is the intended order.
 
 ```sh
 nix-shell -p git --run '
-  git clone https://github.com/tjwise99/WiseOS /mnt/etc/nixos/WiseOS'
+  git clone -b feat/sops-nix-and-install-runbook \
+    https://github.com/tjwise99/WiseOS /mnt/etc/nixos/WiseOS'
 cp /mnt/etc/nixos/hardware-configuration.nix \
    /mnt/etc/nixos/WiseOS/hosts/wise-laptop/hardware-configuration.nix
 # now apply the two edits above to that copy
 ```
+
+After the branch is merged, point the on-disk checkout back at `main` so later rebuilds track it:
+`git -C /etc/nixos/WiseOS fetch origin && git -C /etc/nixos/WiseOS checkout main`.
+
+Editing the tracked `hardware-configuration.nix` leaves the tree dirty, and `nixos-install` will
+print `warning: Git tree '…' is dirty`. That is expected and correct — for a local git flake, Nix
+evaluates the **working-tree** content of tracked files, so your edited hardware file (with the
+`/home` and swap entries) is what gets installed, not the committed placeholder. No local commit is
+needed. (If you would rather be certain, `git -C /mnt/etc/nixos/WiseOS add -A` before installing.)
 
 **5. Place the age key** so the very first activation can decrypt your password. The keyFile path the
 config reads is `/var/lib/sops-nix/key.txt`; under the installer that is `/mnt/var/lib/…`:
