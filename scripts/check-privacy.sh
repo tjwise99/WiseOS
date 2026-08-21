@@ -24,6 +24,14 @@
 # while the others were dead, deleted or wrong. Four branches went unguarded
 # that way. A new shape gets a new entry and a new specimen, not a `|`.
 #
+# THE LIST IS CLOSED. Add a shape when this configuration produces one, not
+# when someone thinks of one. Chasing completeness cannot succeed here: one
+# fact has unbounded spellings, and a MAC rendered as an EUI-64 link-local
+# IPv6 address is the same datum as the two MAC entries already listed — a
+# third entry for one fact, with a fourth behind it. What bounds this list is
+# who has looked at it, which is not a property of the code. Coverage comes
+# from sops-nix (issue #4), not from more entries.
+#
 # NOTHING HERE MAY SPELL A PATTERN THE WAY A CONFIG WOULD. There is no
 # self-exclusion — an earlier revision had one, justified by a claim that was
 # false — so a literal example in a comment is a finding against this file,
