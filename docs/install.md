@@ -12,18 +12,25 @@ desktop on first boot.
 
 ## Before you wipe anything
 
-Two things live only on the current machine and are gone the moment the disk is reformatted.
-
 **The age private key.** `~/.config/sops/age/keys.txt` is what decrypts your login password on the
-new system. Copy it somewhere off the laptop — the installer USB, or a second stick:
+new system, and it must reach the target before `nixos-install` (step 5).
 
-```sh
-cp ~/.config/sops/age/keys.txt /run/media/wise/USB/keys.txt   # adjust the mount path
-```
+Where it comes from depends on the disk choice below:
 
-Losing it is not fatal — you can generate a new key, re-encrypt `secrets.yaml` against it
-(`sops updatekeys`, see [`README.md` → Secrets](../README.md#secrets)), and commit that — but doing
-it after the wipe means doing it from the installer with no editor you are used to. Save the key.
+- **Keeping `/home` (this laptop's plan).** The key lives *on* the `/home` partition you are
+  retaining, so it survives the install untouched — you copy it straight from the mounted partition
+  in step 5, no USB round-trip. Nothing extra to do here.
+- **Wiping the whole disk.** `/home` goes with it, so copy the key off the laptop first:
+  `cp ~/.config/sops/age/keys.txt /run/media/wise/USB/keys.txt` (adjust the mount path).
+
+Even keeping `/home`, a copy on a USB is cheap insurance worth taking: the key and everything else on
+`/home` share one failure mode — `mkfs` on the wrong partition in step 1 — and a copy elsewhere is
+the only thing that survives that. Losing the key is recoverable but tedious (generate a new one,
+`sops updatekeys` against it, re-encrypt and commit — see [`README.md` → Secrets](../README.md#secrets)),
+and you would be doing it from the installer.
+
+If `/home` is LUKS-encrypted you will unlock it from the installer before the key (or your files) are
+readable — one extra step, noted again in step 2.
 
 **Your real login password.** The committed `secrets.yaml` holds a placeholder — the hash of
 `changeme` — so the config evaluates and the VM builds. Replace it with the hash of a password you
@@ -121,9 +128,11 @@ mount /dev/disk/by-label/nixos /mnt
 mkdir -p /mnt/boot
 mount -o umask=0077 /dev/disk/by-label/BOOT /mnt/boot
 
-# Retaining a separate /home? Mount it too, BEFORE nixos-generate-config, so the
-# generator picks it up. Do not format it.
-# mkdir -p /mnt/home && mount /dev/disk/by-label/home /mnt/home
+# Retaining a separate /home (this laptop's plan): mount it too, BEFORE
+# nixos-generate-config, so the generator writes its fileSystems entry. Do NOT
+# format it — no mkfs on this partition. If it is LUKS, `cryptsetup open` it
+# first. Give it a label if it has none: `e2label /dev/nvme0n1pN home`.
+mkdir -p /mnt/home && mount /dev/disk/by-label/home /mnt/home
 ```
 
 **3. Generate the hardware config**, which is the only file this install writes that the repo does
@@ -139,9 +148,10 @@ generated file before it goes in:
 
 - **Reduce `/dev/disk/by-uuid/…` to `by-label`.** `nixos-generate-config` names filesystems by UUID.
   The config, and `just check-privacy`, both want labels — `nixos` and `BOOT`, the ones you formatted
-  with. Rewrite the two `fileSystems` device lines to `/dev/disk/by-label/nixos` and
-  `/dev/disk/by-label/BOOT`. A committed UUID is what `check-privacy` rejects, and it fingerprints
-  the machine.
+  with. Rewrite the `fileSystems` device lines to `/dev/disk/by-label/nixos` and
+  `/dev/disk/by-label/BOOT`. Keeping `/home`? It appears here too (because you mounted it in step 2) —
+  reduce its line to `/dev/disk/by-label/home` as well. A committed UUID is what `check-privacy`
+  rejects, and it fingerprints the machine.
 - **Drop `configuration.nix`.** You do not need the generated `configuration.nix` at all — the flake
   is the configuration. Only the hardware file carries over.
 
@@ -160,7 +170,14 @@ config reads is `/var/lib/sops-nix/key.txt`; under the installer that is `/mnt/v
 
 ```sh
 mkdir -p /mnt/var/lib/sops-nix
-cp /run/media/wise/USB/keys.txt /mnt/var/lib/sops-nix/key.txt   # the key you saved earlier
+
+# Keeping /home (this laptop's plan): the key is on the partition you just
+# mounted — copy it straight across, no USB needed.
+cp /mnt/home/wise/.config/sops/age/keys.txt /mnt/var/lib/sops-nix/key.txt
+
+# Wiped the whole disk instead: use the copy you saved off the laptop.
+# cp /run/media/wise/USB/keys.txt /mnt/var/lib/sops-nix/key.txt
+
 chmod 600 /mnt/var/lib/sops-nix/key.txt
 ```
 
