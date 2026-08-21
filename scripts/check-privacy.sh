@@ -10,10 +10,11 @@
 #
 # This is a backstop and fails open by construction: a denylist cannot see a
 # shape nobody listed. Secrets that belong encrypted now have that structural
-# control — sops-nix, in hosts/wise-laptop/secrets.yaml, decrypted at
-# activation and never written to the store. What backs this backstop is that a
-# secret has a correct home to be in; this scan still catches one typed in
-# plaintext straight into a committed file, which sops cannot prevent.
+# control — sops-nix, in hosts/wise-laptop/secrets.yaml, decrypted at activation
+# and never written to the store — and check-sops asserts those files are fully
+# encrypted rather than trusting they are. What backs this backstop is a secret
+# having a correct home to be in; this scan still catches a loose hash typed
+# into a committed file, which sops cannot prevent.
 #
 # It prints every check by name, so this script is the inventory and no
 # document has to carry a second copy to fall out of step with.
@@ -53,6 +54,15 @@ value_checks=(
   'ipv4-cgnat|CGNAT 100.64-127 range — a tailnet address names a specific machine|(^|[^0-9.])100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\.[0-9]{1,3}\.[0-9]{1,3}([^0-9]|$)'
   'ipv4-linklocal|link-local 169.254 range|(^|[^0-9.])169\.254\.[0-9]{1,3}\.[0-9]{1,3}([^0-9]|$)'
   'ipv6-ula|IPv6 unique local address, fd00::/8|(^|[^0-9a-fA-F:])fd[0-9a-fA-F]{2}:[0-9a-fA-F]{0,4}:[0-9a-fA-F:]+'
+  # A plaintext unix password hash, matched by its Modular Crypt structure —
+  # `$id$…$<blob>` with a long trailing digest — not by enumerating schemes, so
+  # yescrypt, sha512crypt and bcrypt are one shape rather than a `|` list. This
+  # is a value check (scans prose too): a hash pasted into a doc or written into
+  # a `pkgs.writeText` leaks the same as one in a .nix option, and the =-keyed
+  # option checks below miss both. sops ENC[] blobs carry no `$`, so an
+  # encrypted secret does not match. Full-file encryption is check-sops's job;
+  # this catches the loose hash that never went near a secrets file.
+  'crypthash|plaintext unix password hash — publish the encrypted file reference, not the hash|\$[1-9a-z]{1,10}\$[A-Za-z0-9=,./+_-]{1,}\$[A-Za-z0-9./+]{16,}'
 )
 
 option_checks=(
@@ -172,44 +182,6 @@ if [ ${#missed[@]} -gt 0 ]; then
         "$fixture" "${missed[*]}" >&2
     exit 1
 fi
-
-# sops-managed secret files must actually be encrypted. This is the one
-# positive assertion in a file of denylists, and it exists because the denylist
-# cannot cover this: sops.validateSopsFiles does not reject a plaintext file at
-# eval, and a hash written in YAML `key: value` form is matched by none of the
-# option checks above, which all key on `=`. So a secret saved in the clear —
-# whether stripped of its sops metadata or with plaintext values under intact
-# metadata — would pass every other check and `nix eval` besides.
-#
-# A file is treated as a secret if it is named `*secrets.{yaml,yml,json}` (the
-# convention) OR already carries a `sops:` metadata block; either way it must be
-# encrypted. `.sops.yaml` is the recipient config, not a secret: it is neither
-# named `secrets.*` nor carries that block. Markdown is excluded so a doc that
-# shows `sops:` in an example is not mistaken for a secret.
-secret_files=$(
-    {
-        git ls-files -- '*secrets.yaml' '*secrets.yml' '*secrets.json'
-        git grep -lI -e '^sops:' -- . ':(exclude)*.md' 2>/dev/null || true
-    } | sort -u
-)
-while IFS= read -r f; do
-    [ -n "$f" ] || continue
-    meta=$(git grep -lI -e '^sops:' -- "$f" || true)
-    enc=$(git grep -lI -e 'ENC\[' -- "$f" || true)
-    plain=$(git grep -nIE -e '\$(1|2[abxy]|5|6|7|y|gy)\$' -- "$f" 2>/dev/null \
-        | { grep -vE 'ENC\[' || true; })
-    if [ -z "$meta" ] || [ -z "$enc" ]; then
-        printf 'check-privacy: %s is a secret file but not sops-encrypted (sops: metadata or ENC[] value absent)\n' "$f" >&2
-        status=1
-    elif [ -n "$plain" ]; then
-        printf 'check-privacy: %s has a plaintext hash outside an ENC[] value:\n%s\n' "$f" "$plain" >&2
-        status=1
-    else
-        printf '  ok  %s is sops-encrypted\n' "$f"
-    fi
-done <<EOF
-$secret_files
-EOF
 
 # Printed on success too: an exemption is a hole, and a growing count should be
 # visible in CI output rather than discoverable only by grep.

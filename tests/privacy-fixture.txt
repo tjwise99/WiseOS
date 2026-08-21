@@ -32,6 +32,11 @@ Excluded from the real scan. Invented values, matched by shape alone.
   users.users.example.initialHashedPassword = "$6$example$notarealhash";
   initialPassword = "example-not-the-placeholder";
 
+  # A full-length crypt hash — the crypthash value shape, which the two option
+  # checks above miss when the hash is loose: pasted into prose, or written into
+  # a `pkgs.writeText` rather than assigned to a hashedPassword* option.
+  loose = "$6$abcdefghijklmnop$0123456789abcdef0123456789abcdef0123456789abcdeXYZ";
+
   # --- machine and network identity --------------------------------------
   device     = "/dev/disk/by-uuid/6f3c1b2a-9d4e-4f8b-8c1d-2e5a7b9c0d1f";
   macColon   = "de:ad:be:ef:12:34";

@@ -1,0 +1,20 @@
+# Positive control for scripts/check-sops.sh — NOT a real secret, no real key.
+#
+# Valid-looking sops metadata with one data value left in the clear: the exact
+# shape of a file hand-edited without the `sops` round-trip, which is the way a
+# leak actually happens. check-sops must flag this; if it ever reads as fully
+# encrypted, the parser is broken and would bless real plaintext by the same
+# logic. Excluded from check-sops's own discovery so it is never taken for a
+# live secret, and the plaintext value is a plain string — no hash, UUID or
+# address shape — so it trips nothing in check-privacy either.
+example_value: this-is-plaintext-not-a-ciphertext
+sops:
+    age:
+        - recipient: age1exampleexampleexampleexampleexampleexampleexampleexampexxx
+          enc: |
+            -----BEGIN AGE ENCRYPTED FILE-----
+            example-not-real
+            -----END AGE ENCRYPTED FILE-----
+    lastmodified: "2026-01-01T00:00:00Z"
+    mac: ENC[AES256_GCM,data:example,iv:example,tag:example,type:str]
+    version: 3.13.3
