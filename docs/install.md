@@ -2,9 +2,8 @@
 
 This is the one-way step the rest of the repo was built to make safe: everything until now runs from
 Manjaro without touching the disk, and this replaces Manjaro with the NixOS defined in
-`nixosConfigurations.wise-laptop`. Read it through once before starting — two of the steps (saving
-the age key, setting the real password hash) happen *on the current system*, and are painful to
-recover from if the disk is already wiped.
+`nixosConfigurations.wise-laptop`. Read it through once before starting — the *Before you wipe* steps
+happen *on the current system* and are painful to recover from once the disk has been touched.
 
 The end state: the laptop boots NixOS, the `wise` account logs in with a password that was never
 committed in plaintext or copied into `/nix/store`, and `dotfiles-provision` has laid down the
@@ -27,10 +26,8 @@ Even keeping `/home`, a copy on a USB is cheap insurance worth taking: the key a
 `/home` share one failure mode — `mkfs` on the wrong partition in step 1 — and a copy elsewhere is
 the only thing that survives that. Losing the key is recoverable but tedious (generate a new one,
 `sops updatekeys` against it, re-encrypt and commit — see [`README.md` → Secrets](../README.md#secrets)),
-and you would be doing it from the installer.
-
-If `/home` is LUKS-encrypted you will unlock it from the installer before the key (or your files) are
-readable — one extra step, noted again in step 2.
+and you would be doing it from the installer. (This laptop's `/home` is plain ext4 — no LUKS unlock
+to worry about.)
 
 **Your real login password.** The committed `secrets.yaml` holds a placeholder — the hash of
 `changeme` — so the config evaluates and the VM builds. Replace it with the hash of a password you
@@ -56,83 +53,68 @@ git add hosts/wise-laptop/secrets.yaml && git commit -m "secrets: set real wise 
 deliberately unsynced, so SSH keys, browser profiles and anything under it exist nowhere else. Back
 up what you need.
 
-## Disk layout — the one real decision
+## Disk layout — keeping /home
 
-The config names two filesystems by label (`hardware-configuration.nix`): an ESP labelled `BOOT` and
-a root labelled `nixos`. How you carve the disk to produce them is the choice.
+This laptop's disk was confirmed with `lsblk -f`; the plan keeps `/home` and reinstalls only the
+system. **Re-run `lsblk -f` from the installer before touching anything** — device names can shift,
+and this is the step with no undo.
 
-**Wipe Manjaro (recommended).** The whole disk becomes NixOS. Simplest, and the only option that
-gives the 512 M ESP entirely to NixOS rather than sharing it. A fresh GPT with two partitions:
-
-| Partition | Size | Type | Filesystem | Label |
+| Partition | Size | Today | After install | Touched? |
 | --- | --- | --- | --- | --- |
-| 1 | 512 MiB | EFI System | FAT32 | `BOOT` |
-| 2 | rest | Linux filesystem | ext4 | `nixos` |
+| `nvme0n1p1` | 512M | ESP, at `/boot/efi` | ESP, label `BOOT`, mounted at `/boot` | reformatted |
+| `nvme0n1p2` | 2G | swap | swap, label `swap` | remade (contents are scratch) |
+| `nvme0n1p3` | 89.3G | Manjaro `/` | root, ext4, label `nixos` | **reformatted — erased** |
+| `nvme0n1p4` | 146.7G | `/home` | `/home`, label `home` | **kept — never formatted** |
 
-**Dual-boot.** Shrink the existing Manjaro root from a live USB *first* (with `gparted` or
-`parted`), then add the ext4 `nixos` partition in the freed space and reuse Manjaro's existing ESP as
-`BOOT`. The catch worth knowing before you commit: a 512 M ESP shared between two distros' kernels is
-tight — NixOS keeps a kernel and initrd per generation there, which is why
-`boot.loader.systemd-boot.configurationLimit` is already pinned to 10. If you dual-boot, watch that
-the shared ESP does not fill, and reuse the existing ESP label rather than reformatting it (that
-would strip Manjaro's boot entries).
+The single rule: **`mkfs` runs on p1, p2 and p3, never on p4.** Everything under `/home` survives,
+including `~/dotfiles`, which makes first-boot provisioning a near no-op — it finds the clone already
+there and skips it.
 
-### Retaining a separate /home
+Two things beyond "don't format p4":
 
-If `/home` is its own partition — which this laptop has — keep it and reinstall only the system. The
-rule is one line: **format the root partition, never the home partition.** Everything under `/home`
-survives, including `~/dotfiles`, which makes first-boot provisioning a near no-op — it finds the
-clone already there and skips it.
-
-Three things to get right:
-
-- **Never `mkfs` the home partition.** In step 1 below, format only root (`nixos`) and, if wiping the
-  rest, the ESP (`BOOT`). Leave the home partition alone.
-- **Mount it before `nixos-generate-config`.** Mount the existing home partition at `/mnt/home`
-  (step 2), and the generator writes its `fileSystems."/home"` entry for you — no hand-editing beyond
-  reducing its UUID to a label, as for the others. Give it a label first if it has none:
-  `e2label /dev/nvme0n1pN home` renames the label and touches no data.
-- **Match the owner.** The config pins `wise` to `uid = 1000` — almost certainly what a Manjaro first
-  user is; confirm with `ls -ln /mnt/home` (read the numeric owner column). If it is 1000 the files
-  stay owned correctly. If the primary *group* differs — Manjaro's per-user group versus NixOS's
-  shared `users` (gid 100) — fix it once after install:
+- **Nothing is labelled today, and the config is entirely label-based** (`by-label/nixos`,
+  `by-label/BOOT`, and the `home` label you mount by). So labelling every partition is a required
+  step below, not a nicety. `e2label`/`fatlabel`/`mkswap -L` rename a label and, for `/home`, touch
+  no file data — but label `/home` while it is **unmounted**.
+- **Match the owner.** The config pins `wise` to `uid = 1000`, which a Manjaro first user almost
+  certainly is; confirm with `ls -ln /mnt/home` (read the numeric owner column). If it is 1000 the
+  files stay owned correctly. If the primary *group* differs — Manjaro's per-user group versus
+  NixOS's shared `users` (gid 100) — fix it once after install:
   `nixos-enter --root /mnt -c 'chown -R wise:users /home/wise'`.
 
-Back up `/home` anyway. A slip in step 1 — formatting the wrong partition — erases it, and that is the
-one mistake this runbook cannot undo.
-
-The steps below assume the **wipe** path on an NVMe disk. Run `lsblk` first and substitute your
-actual device — `/dev/nvme0n1` here, `/dev/sda` on a SATA disk. **This erases the disk.**
+Back up `/home` anyway. A slip below — `mkfs` on p4 instead of p3 — erases it, and that is the one
+mistake this runbook cannot undo. (Wiping the whole disk instead, `/home` and all, is the same steps
+minus the "keep p4" care; it is not this laptop's plan and is not written out separately.)
 
 ## Install
 
 Boot a recent NixOS installer USB (the minimal ISO is enough) and bring up the network — `iwctl` for
-wifi, or plug in ethernet.
-
-**1. Partition and format**, producing the two labels the config expects:
+wifi, or plug in ethernet. Confirm the layout matches the table above:
 
 ```sh
-parted /dev/nvme0n1 -- mklabel gpt
-parted /dev/nvme0n1 -- mkpart ESP fat32 1MiB 513MiB
-parted /dev/nvme0n1 -- set 1 esp on
-parted /dev/nvme0n1 -- mkpart primary 513MiB 100%
-
-mkfs.fat -F32 -n BOOT /dev/nvme0n1p1
-mkfs.ext4 -L nixos    /dev/nvme0n1p2
+lsblk -f          # p3 = Manjaro root to erase, p4 = /home to keep — be certain before mkfs
 ```
 
-**2. Mount** by label, exactly as the config will:
+**1. Reformat the system partitions and label all four.** p4 (`/home`) is labelled but **not**
+formatted; p1/p2/p3 are remade. Nothing here is mounted yet — the disk is idle under the installer.
+
+```sh
+mkfs.ext4 -L nixos    /dev/nvme0n1p3     # root — ERASES the old Manjaro system
+mkfs.fat  -F32 -n BOOT /dev/nvme0n1p1    # ESP — Manjaro's boot entries go with it (intended)
+mkswap    -L swap      /dev/nvme0n1p2    # swap — relabel/remake, contents are scratch
+e2label   /dev/nvme0n1p4 home           # /home — LABEL ONLY, no mkfs, while unmounted
+```
+
+**2. Mount and enable swap** by label, exactly as the config will — all four, and *before*
+`nixos-generate-config`, so the generator captures every one:
 
 ```sh
 mount /dev/disk/by-label/nixos /mnt
 mkdir -p /mnt/boot
 mount -o umask=0077 /dev/disk/by-label/BOOT /mnt/boot
-
-# Retaining a separate /home (this laptop's plan): mount it too, BEFORE
-# nixos-generate-config, so the generator writes its fileSystems entry. Do NOT
-# format it — no mkfs on this partition. If it is LUKS, `cryptsetup open` it
-# first. Give it a label if it has none: `e2label /dev/nvme0n1pN home`.
-mkdir -p /mnt/home && mount /dev/disk/by-label/home /mnt/home
+mkdir -p /mnt/home
+mount /dev/disk/by-label/home /mnt/home     # the kept partition; never formatted
+swapon /dev/disk/by-label/swap
 ```
 
 **3. Generate the hardware config**, which is the only file this install writes that the repo does
@@ -146,12 +128,11 @@ This writes `/mnt/etc/nixos/hardware-configuration.nix` describing *this* machin
 modules. The repo ships a placeholder for that file; you are about to replace it. Two edits to the
 generated file before it goes in:
 
-- **Reduce `/dev/disk/by-uuid/…` to `by-label`.** `nixos-generate-config` names filesystems by UUID.
-  The config, and `just check-privacy`, both want labels — `nixos` and `BOOT`, the ones you formatted
-  with. Rewrite the `fileSystems` device lines to `/dev/disk/by-label/nixos` and
-  `/dev/disk/by-label/BOOT`. Keeping `/home`? It appears here too (because you mounted it in step 2) —
-  reduce its line to `/dev/disk/by-label/home` as well. A committed UUID is what `check-privacy`
-  rejects, and it fingerprints the machine.
+- **Reduce every `/dev/disk/by-uuid/…` to `by-label`.** `nixos-generate-config` names devices by
+  UUID, and it will have written all four you mounted — the two `fileSystems` (`nixos`, `BOOT`), the
+  `fileSystems."/home"` (because you mounted it in step 2), and a `swapDevices` entry (because swap
+  was on). Rewrite each `device` to its label: `/dev/disk/by-label/{nixos,BOOT,home,swap}`. A
+  committed UUID is what `check-privacy` rejects, and it fingerprints the machine.
 - **Drop `configuration.nix`.** You do not need the generated `configuration.nix` at all — the flake
   is the configuration. Only the hardware file carries over.
 
