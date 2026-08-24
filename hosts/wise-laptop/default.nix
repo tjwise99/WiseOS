@@ -107,6 +107,10 @@ in
   services.xserver.windowManager.i3.enable = true;
   services.xserver.xkb.layout = "us";
 
+  # enable a gnome-keyring so we have a manager for that
+  services.gnome.gnome-keyring.enable = true;
+  security.pam.services.lightdm.enableGnomeKeyring = true;
+
   programs.zsh.enable = true;
   programs.nix-ld.enable = true;
 
