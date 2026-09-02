@@ -1,8 +1,8 @@
 { pkgs, ... }:
 
-# Userland, shared by every host: the Manjaro laptop, the Ubuntu WSL box, and
-# the NixOS machine that replaces the first. Nothing here may need X, a radio or
-# particular hardware — that belongs in hosts/wise-laptop.
+# Userland, shared by every host: the Ubuntu WSL box and the NixOS laptop.
+# Nothing here may need X, a radio or particular hardware — that belongs in
+# hosts/wise-laptop.
 #
 # home.username and home.homeDirectory are absent on purpose: flake.nix supplies
 # them per output, and the NixOS module derives them from users.users.wise.

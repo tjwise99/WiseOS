@@ -112,11 +112,47 @@ in
   security.pam.services.lightdm.enableGnomeKeyring = true;
 
   programs.zsh.enable = true;
+
+  # nix-ld runs foreign FHS-linked binaries by supplying an ELF loader plus a
+  # library search path. Its default path omits the GUI stack, so a downloaded
+  # Playwright/Puppeteer Chromium fails at launch on `libglib-2.0.so.0`. These
+  # are chrome-headless-shell's runtime shared libraries, so `just render-install`
+  # in WiseKiosk (a prebuilt Chromium, not a nix one) resolves them here.
   programs.nix-ld.enable = true;
+  programs.nix-ld.libraries = with pkgs; [
+    glib
+    nss
+    nspr
+    at-spi2-atk
+    at-spi2-core
+    cups
+    dbus
+    libdrm
+    gtk3
+    pango
+    cairo
+    expat
+    libxkbcommon
+    libgbm
+    mesa
+    libGL
+    alsa-lib
+    xorg.libX11
+    xorg.libXcomposite
+    xorg.libXdamage
+    xorg.libXext
+    xorg.libXfixes
+    xorg.libXrandr
+    xorg.libxcb
+    xorg.libXrender
+    xorg.libXtst
+    xorg.libXi
+    xorg.libXScrnSaver
+    xorg.libxshmfence
+  ];
 
   # Rootful docker for local container builds. The `docker` group on the wise
-  # user grants socket access without sudo. On the Manjaro install this is a
-  # hand-run `pacman -S docker`; here is where it survives the switch.
+  # user grants socket access without sudo.
   virtualisation.docker.enable = true;
 
   users.users.wise = {

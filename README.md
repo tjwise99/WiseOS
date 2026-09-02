@@ -1,14 +1,15 @@
 # WiseOS
 
-NixOS and Home Manager configuration for the laptop, built and tested from the Manjaro install it
-is eventually meant to replace.
+NixOS and Home Manager configuration for the laptop. It now runs on bare metal, having replaced the
+install it was built and tested against; that migration is the runbook in
+[`docs/install.md`](docs/install.md).
 
-The point of the layout is that nothing here has to wait for a NixOS machine to exist. Home Manager
-runs against Manjaro today, and `nixos-rebuild build-vm` boots the full system config in QEMU from
-the same flake. When the metal install happens, the only file that changes is
-`hosts/wise-laptop/hardware-configuration.nix` — and `nixos-generate-config` writes that file with
-`/dev/disk/by-uuid/` devices, which `just check-privacy` rejects. Reduce them to labels, as the
-placeholder already does, before committing it.
+The layout was designed so nothing had to wait for a NixOS machine to exist, and that property still
+earns its keep: `nixos-rebuild build-vm` boots the full system config in QEMU from the same flake, so
+a change can be proved in a VM before it reaches the metal. The one host-specific file,
+`hosts/wise-laptop/hardware-configuration.nix`, is written by `nixos-generate-config` with
+`/dev/disk/by-uuid/` devices, which `just check-privacy` rejects; reduce them to labels, as the
+placeholder does, before committing it.
 
 ## Why this is not in `dotfiles`
 
@@ -37,17 +38,19 @@ argument for cohousing is atomic commits when a package moves from `packages/man
 | Path                   | Contents                                                           |
 | ---------------------- | ------------------------------------------------------------------ |
 | `flake.nix`            | Inputs and the two outputs, sharing one nixpkgs pin                |
-| `home/wise.nix`        | Home Manager — runs on Manjaro now, carries over to NixOS          |
+| `home/wise.nix`        | Home Manager userland — the NixOS laptop and the WSL box           |
 | `hosts/wise-laptop/`   | The system config, and the hardware file the installer regenerates |
 | `justfile`, `scripts/` | The checks, and `just verify` — the one recipe CI runs             |
 
 ## The two outputs
 
-Both evaluate against the same `nixpkgs`, so what is proved in one is true in the other.
+The NixOS laptop and the WSL home config, both evaluating against the same `nixpkgs`, so what is
+proved in one is true in the other.
 
 ```sh
-home-manager switch --flake .#wise          # apply to the running Manjaro install
-nixos-rebuild build-vm --flake .#wise-laptop # build a bootable QEMU VM, then ./result/bin/run-*-vm
+sudo nixos-rebuild switch --flake .#wise-laptop # apply to the laptop
+nixos-rebuild build-vm    --flake .#wise-laptop # build a bootable QEMU VM, then ./result/bin/run-*-vm
+home-manager switch       --flake .#wsl         # apply the shared userland on the WSL box
 ```
 
 `nixos-rebuild build-vm` needs no NixOS and no root. The QEMU module overrides `fileSystems` with
