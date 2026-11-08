@@ -42,6 +42,7 @@
         builtins.elem (nixpkgs.lib.getName pkg) [ 
           "claude-code" 
           "discord"
+          "discord-unwrapped"
           "vscode"
         ];
 
@@ -63,6 +64,12 @@
       # 1.144.0 build failure) and, patched past that, cannot verify extension
       # signatures (#584184 vsce-sign EACCES). Unstable carries the fixed
       # script. Drop this once #584492 is closed on release-26.05.
+      #
+      # discord: the packaged desktop core pins an OpenH264 build, while the
+      # server-delivered client downloads its own and deletes the rest. Once
+      # they disagree every H.264 stream fails to decode (no video, error
+      # 2012): 1.0.159 on 26.05 wants 2.5.1, the client fetches 2.7.0, and
+      # 1.0.168 matches it. Stays here while 26.05 lags upstream releases.
       unstableOverlay = _final: prev: {
         inherit
           (import nixpkgs-unstable {
@@ -71,6 +78,7 @@
           })
           brave
           claude-code
+          discord
           vscode
           ;
       };
