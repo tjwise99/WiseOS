@@ -5,12 +5,12 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
 
     # claude-code ships several times a week; the nixos-26.05 branch backports
-    # it rarely and is stuck far behind. This input exists solely to float that
-    # one package forward (see claudeOverlay below) — nothing else follows it,
-    # so the eval-critical set stays wholly on 26.05. Tracks the -small channel
-    # rather than full unstable: it is Hydra-built (so claude-code and its deps
-    # are in the binary cache) but advances on a smaller gate, so it carries a
-    # newer claude-code than nixpkgs-unstable does.
+    # it rarely and is stuck far behind. This input exists solely to float a few
+    # named packages forward (see unstableOverlay below) — nothing else follows
+    # it, so the eval-critical set stays wholly on 26.05. Tracks the -small
+    # channel rather than full unstable: it is Hydra-built (so its packages and
+    # deps are in the binary cache) but advances on a smaller gate, so it
+    # carries newer builds than nixpkgs-unstable does.
     nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable-small";
 
     # Pinned to the matching release branch, and made to follow nixpkgs so both
@@ -42,28 +42,41 @@
         builtins.elem (nixpkgs.lib.getName pkg) [ 
           "claude-code" 
           "discord"
+          "vscode"
         ];
 
-      # Replaces just claude-code with the unstable build, keyed off whichever
-      # package set is being extended so it works for both the standalone pkgs
-      # below and the NixOS host's own set. The unstable import carries the same
-      # unfree predicate so its claude-code evaluates. It shares nothing else
-      # with the surrounding set — claude-code is a fetchurl of a prebuilt
-      # binary — so this does not reintroduce the cross-release eval risk the
-      # follows above are avoiding.
-      claudeOverlay = _final: prev: {
+      # Replaces just the named packages with their unstable builds, keyed off
+      # whichever package set is being extended so it works for both the
+      # standalone pkgs below and the NixOS host's own set. The unstable import
+      # carries the same unfree predicate so claude-code evaluates. Each is a
+      # leaf application built against unstable's own libraries, so nothing in
+      # the 26.05 set depends on it and the cross-release eval risk the follows
+      # above are avoiding does not return.
+      #
+      # brave: nixpkgs dropped it 2026-11-03 for lacking a committer maintainer
+      # (PR #582838 brave, brave-origin: drop) and re-added it 2026-11-07, which
+      # unstable-small carries before the nixos-26.05 channel does.
+      #
+      # vscode: 26.05 jumped 1.119 -> 1.144 without the build-script changes
+      # those releases needed, so its 1.144 fails to build (#584492 vscode
+      # 1.144.0 build failure) and, patched past that, cannot verify extension
+      # signatures (#584184 vsce-sign EACCES). Unstable carries the fixed
+      # script. Drop this once #584492 is closed on release-26.05.
+      unstableOverlay = _final: prev: {
         inherit
           (import nixpkgs-unstable {
             inherit (prev.stdenv.hostPlatform) system;
             config = { inherit allowUnfreePredicate; };
           })
+          brave
           claude-code
+          vscode
           ;
       };
 
       pkgs = import nixpkgs {
         inherit system;
-        overlays = [ claudeOverlay ];
+        overlays = [ unstableOverlay ];
         config = { inherit allowUnfreePredicate; };
       };
 
@@ -103,7 +116,7 @@
           ./hosts/wise-laptop
           {
             nixpkgs.config.allowUnfreePredicate = allowUnfreePredicate;
-            nixpkgs.overlays = [ claudeOverlay ];
+            nixpkgs.overlays = [ unstableOverlay ];
           }
           sops-nix.nixosModules.sops
           home-manager.nixosModules.home-manager

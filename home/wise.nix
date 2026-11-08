@@ -38,6 +38,15 @@
     fzf
     zoxide
     delta
+    bitwarden-cli        # bw
+
+    # Only the jupyter* entry points: the jupyter env also ships python and
+    # python3, which would shadow the uv interpreter in ~/.local/bin — this
+    # profile is ahead of it on PATH.
+    (runCommand "jupyter-bin" { } ''
+      mkdir -p $out/bin
+      ln -s ${jupyter}/bin/jupyter* $out/bin/
+    '')
 
     # ranger and its previews
     ranger

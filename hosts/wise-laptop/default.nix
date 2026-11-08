@@ -187,9 +187,22 @@ in
     noto-fonts-color-emoji
   ];
 
+  # The dotfiles-managed Python is a self-built asdf toolchain, not a Nix one, so
+  # its OpenSSL carries the upstream-default trust path — /etc/ssl/cert.pem —
+  # which NixOS does not create (it ships /etc/ssl/certs/ca-certificates.crt
+  # instead). With no SSL_CERT_FILE exported either, that Python falls back to the
+  # missing default and every TLS verify dies with CERTIFICATE_VERIFY_FAILED,
+  # while Nix-wrapped tools like curl are unaffected. Point the compiled-in
+  # default at the bundle NixOS already generates. A file rather than an
+  # SSL_CERT_FILE session variable so it also reaches non-login shells and system
+  # services (dotfiles-provision below), which the session-variable path misses.
+  environment.etc."ssl/cert.pem".source =
+    config.environment.etc."ssl/certs/ca-certificates.crt".source;
+
   environment.systemPackages = with pkgs; [
     git
     vim
+    vscode
     
     # Required by dotfiles' ./install. dotbot runs shell: steps with $SHELL,
     # and NixOS's /etc/zshenv sources /etc/set-environment, which assigns PATH
