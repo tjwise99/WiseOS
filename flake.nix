@@ -48,14 +48,15 @@
       # Replaces just the named packages with their unstable builds, keyed off
       # whichever package set is being extended so it works for both the
       # standalone pkgs below and the NixOS host's own set. The unstable import
-      # carries the same unfree predicate so claude-code evaluates. Each is a
-      # leaf application built against unstable's own libraries, so nothing in
-      # the 26.05 set depends on it and the cross-release eval risk the follows
-      # above are avoiding does not return.
+      # carries the same unfree predicate so the unfree ones evaluate. Each is a
+      # leaf application built against unstable's own libraries; anything in
+      # the 26.05 set that takes one as an input (vscode-with-extensions, say)
+      # gets the unstable build, and no 26.05 system component does.
       #
       # brave: nixpkgs dropped it 2026-11-03 for lacking a committer maintainer
       # (PR #582838 brave, brave-origin: drop) and re-added it 2026-11-07, which
-      # unstable-small carries before the nixos-26.05 channel does.
+      # unstable-small carries before the nixos-26.05 channel does. Drop this
+      # once nixos-26.05 evaluates brave.
       #
       # vscode: 26.05 jumped 1.119 -> 1.144 without the build-script changes
       # those releases needed, so its 1.144 fails to build (#584492 vscode
