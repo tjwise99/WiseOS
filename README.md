@@ -150,6 +150,10 @@ entries to a system Nix did not build.
 Manager release tracks a nixpkgs release, and crossing them is the ordinary cause of evaluation
 errors. `home-manager` follows this flake's `nixpkgs` so only one package set is ever in play.
 
+The one exception is `nixpkgs-unstable`, which nothing follows. `unstableOverlay` in `flake.nix`
+lifts a short list of leaf applications from it, each with the reason and the condition for moving
+it back to 26.05.
+
 `stateVersion` in both configs records the release whose defaults they were written against. It is
 not a version to bump for freshness; changing it opts into changed stateful defaults.
 
