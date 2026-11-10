@@ -202,7 +202,7 @@ in
   environment.systemPackages = with pkgs; [
     git
     vim
-    vscode
+    vscode.fhs
     
     # Required by dotfiles' ./install. dotbot runs shell: steps with $SHELL,
     # and NixOS's /etc/zshenv sources /etc/set-environment, which assigns PATH
