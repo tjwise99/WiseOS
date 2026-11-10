@@ -44,6 +44,7 @@
           "discord"
           "discord-unwrapped"
           "vscode"
+          "code"               # vscode.fhs — the FHS wrapper is named after its binary
         ];
 
       # Replaces just the named packages with their unstable builds, keyed off

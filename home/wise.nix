@@ -24,6 +24,8 @@
 
     claude-code
 
+    lazydocker
+
     # browser driving functionality
     playwright-driver.browsers
 
@@ -39,6 +41,9 @@
     zoxide
     delta
     bitwarden-cli        # bw
+    lcov                # lcov + genhtml, coverage reports
+    grcov                # coverage aggregator for Rust (llvm-cov/gcov profiles)
+    graphviz
 
     # Only the jupyter* entry points: the jupyter env also ships python and
     # python3, which would shadow the uv interpreter in ~/.local/bin — this
