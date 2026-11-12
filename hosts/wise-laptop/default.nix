@@ -107,6 +107,10 @@ in
   services.xserver.windowManager.i3.enable = true;
   services.xserver.xkb.layout = "us";
 
+  # The touchpad hardware is faulty. Matches the touchpad class only, so the
+  # TrackPoint and its buttons stay live.
+  services.libinput.touchpad.sendEventsMode = "disabled";
+
   # enable a gnome-keyring so we have a manager for that
   services.gnome.gnome-keyring.enable = true;
   security.pam.services.lightdm.enableGnomeKeyring = true;
