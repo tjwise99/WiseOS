@@ -107,6 +107,17 @@ in
   services.xserver.windowManager.i3.enable = true;
   services.xserver.xkb.layout = "us";
 
+  # The touchpad hardware is faulty. Matches the touchpad class only, so the
+  # TrackPoint and its buttons stay live.
+  services.libinput.touchpad.sendEventsMode = "disabled";
+
+  # A Bluetooth mouse stands in for the touchpad. Powered at boot so a trusted
+  # device reconnects without anyone opening bluetui.
+  hardware.bluetooth = {
+    enable = true;
+    powerOnBoot = true;
+  };
+
   # enable a gnome-keyring so we have a manager for that
   services.gnome.gnome-keyring.enable = true;
   security.pam.services.lightdm.enableGnomeKeyring = true;
@@ -235,6 +246,7 @@ in
     pywal
     batsignal
     impala
+    bluetui
     brave
     discord
     opencloud-desktop
