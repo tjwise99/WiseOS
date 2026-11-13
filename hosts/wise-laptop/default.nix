@@ -166,6 +166,14 @@ in
   # user grants socket access without sudo.
   virtualisation.docker.enable = true;
 
+  # Build cache and superseded images are never reclaimed by docker itself.
+  # --all also takes every image no container uses, and stopped containers go
+  # with them; named volumes are kept.
+  virtualisation.docker.autoPrune = {
+    enable = true;
+    flags = [ "--all" ];
+  };
+
   users.users.wise = {
     isNormalUser = true;
     description = "Wise";
@@ -358,6 +366,24 @@ in
   };
 
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
+
+  # configurationLimit trims only the boot menu; every system generation and its
+  # closure stays in the store until something deletes the generation. 14 days
+  # still covers a rollback across a bad update. A `result` symlink in a working
+  # tree is a GC root of its own and outlives this.
+  nix.gc = {
+    automatic = true;
+    dates = "weekly";
+    options = "--delete-older-than 14d";
+  };
+
+  # Hard-links identical files across store paths. A timer rather than
+  # auto-optimise-store, which pays the cost inside every build.
+  nix.optimise.automatic = true;
+
+  # systemd's default ceiling is 10% of the filesystem, up to 4G. A crashing
+  # test run dumps on every invocation, so the default is reached in days.
+  systemd.coredump.settings.Coredump.MaxUse = "1G";
 
   # The release whose defaults this config was written against. Not a version
   # to bump for newness — changing it opts into changed stateful defaults.
