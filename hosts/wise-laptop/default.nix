@@ -118,14 +118,14 @@ in
     powerOnBoot = true;
   };
 
-  # Performance on charger and battery alike, so every boot comes up in it.
-  # auto-cpufreq-gtk's governor override switches to powersave; the override
-  # lives in /run, so a reboot returns to performance.
+  # Follows the power source. auto-cpufreq-gtk's governor override pins either
+  # mode; its "powersave" applies battery.governor, so that one must stay
+  # powersave for the override to do anything.
   services.auto-cpufreq = {
     enable = true;
     settings = {
       charger.governor = "performance";
-      battery.governor = "performance";
+      battery.governor = "powersave";
     };
   };
 
