@@ -118,6 +118,30 @@ in
     powerOnBoot = true;
   };
 
+  # Follows the power source. auto-cpufreq-gtk's governor override pins either
+  # mode; its "powersave" applies battery.governor, so that one must stay
+  # powersave for the override to do anything.
+  services.auto-cpufreq = {
+    enable = true;
+    settings = {
+      charger.governor = "performance";
+      battery.governor = "powersave";
+    };
+  };
+
+  # auto-cpufreq-gtk authorises through pkexec, which needs a polkit agent in
+  # the session to ask for the password; i3 starts none of its own.
+  systemd.user.services.polkit-gnome-authentication-agent-1 = {
+    description = "polkit authentication agent";
+    wantedBy = [ "graphical-session.target" ];
+    partOf = [ "graphical-session.target" ];
+    after = [ "graphical-session.target" ];
+    serviceConfig = {
+      ExecStart = "${pkgs.polkit_gnome}/libexec/polkit-gnome-authentication-agent-1";
+      Restart = "on-failure";
+    };
+  };
+
   # enable a gnome-keyring so we have a manager for that
   services.gnome.gnome-keyring.enable = true;
   security.pam.services.lightdm.enableGnomeKeyring = true;
